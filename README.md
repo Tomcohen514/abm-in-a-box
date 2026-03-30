@@ -19,15 +19,18 @@ AWS required a streamlined event creation workflow for their ABM (Account-Based 
 
 ### The Solution
 
-A custom embedded form integrated into KMS (Kaltura MediaSpace) with a PHP backend that orchestrates:
-- **Event creation** with template selection
-- **Session (agenda) management** with speaker assignments
-- **Landing page customization** with images and content
-- **Multi-step workflows** combining EP Public API and EPM Internal API
+**Architecture**:
+- **Frontend**: KMS page with Event Platform design system
+- **Backend**: PS (Professional Services) module
+- **Integration**: PHP helper functions orchestrating EP Public API and EPM Internal API
+
+**What's in this repo**:
+- `helpers.php` - Production PHP functions for PS module backend
+- `embed-final-noauth.html` - POC/prototype used for design testing and validation (reference only)
 
 ### Development Approach
 
-This project demonstrates a **human-AI collaboration** using Claude Code to accelerate development while maintaining professional standards, security practices, and architectural oversight.
+This project demonstrates **human-AI collaboration** using Claude Code to accelerate PS module development while maintaining professional standards, security practices, and architectural oversight.
 
 ---
 
@@ -68,12 +71,11 @@ Before proceeding with development, four solution approaches were evaluated with
 
 ```mermaid
 graph TB
-    User[Event Creator] --> KMS[KMS Page]
-    KMS --> Form[Embedded Form]
-    Form --> Backend[PHP Backend]
+    User[Event Creator] --> KMS[KMS Page with Design System]
+    KMS --> PSModule[PS Module Backend]
 
-    Backend --> EPAPI[EP Public API - KS Auth]
-    Backend --> EPMAPI[EPM Internal API - JWT Auth]
+    PSModule --> EPAPI[EP Public API - KS Auth]
+    PSModule --> EPMAPI[EPM Internal API - JWT Auth]
 
     EPAPI --> Events[Create Event & Sessions]
     EPMAPI --> Features[Speakers, Uploads, Landing Page, URLs]
@@ -81,8 +83,8 @@ graph TB
     Events --> Output[Event Created]
     Features --> Output
 
-    style Form fill:#e3f2fd
-    style Backend fill:#fff3e0
+    style KMS fill:#e3f2fd
+    style PSModule fill:#fff3e0
     style EPAPI fill:#e8f5e9
     style EPMAPI fill:#fce4ec
     style Output fill:#f3e5f5
@@ -93,61 +95,61 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant User
-    participant Form as Embedded Form
-    participant PHP as PHP Backend
+    participant KMS as KMS Page
+    participant PS as PS Module
     participant EPAPI as EP Public API<br/>(KS Auth)
     participant EPMAPI as EPM Internal API<br/>(JWT Auth)
     participant Upload as Kaltura Upload API<br/>(KS Auth)
 
     Note over User,Upload: Complete Event Creation Workflow
 
-    User->>Form: Fill event details
-    Form->>PHP: Submit form data (JSON)
+    User->>KMS: Fill event details
+    KMS->>PS: Submit form data
 
     rect rgb(200, 230, 200)
-        Note over PHP,EPAPI: PUBLIC API - Event Creation
-        PHP->>EPAPI: POST /api/v1/events/create
-        EPAPI-->>PHP: eventId: 2661602
+        Note over PS,EPAPI: PUBLIC API - Event Creation
+        PS->>EPAPI: POST /api/v1/events/create
+        EPAPI-->>PS: eventId: 2661602
     end
 
     rect rgb(255, 220, 220)
-        Note over PHP,EPMAPI: INTERNAL API - Get URLs
-        PHP->>EPMAPI: POST /epm/events/list
-        EPMAPI-->>PHP: epmUrl, kmsUrl, epmId
-    end
-
-    rect rgb(200, 230, 200)
-        Note over PHP,EPAPI: PUBLIC API - Session Creation
-        PHP->>EPAPI: POST /api/v1/sessions/create
-        EPAPI-->>PHP: sessionId: 1_abc123
-    end
-
-    rect rgb(255, 220, 220)
-        Note over PHP,EPMAPI: INTERNAL API - Upload Credentials
-        PHP->>EPMAPI: POST /epm/eventUsers/getUploadCredentials
-        EPMAPI-->>PHP: uploadTokenId, KS, entryId
+        Note over PS,EPMAPI: INTERNAL API - Get URLs
+        PS->>EPMAPI: POST /epm/events/list
+        EPMAPI-->>PS: epmUrl, kmsUrl, epmId
     end
 
     rect rgb(200, 230, 200)
-        Note over PHP,Upload: PUBLIC API - Image Upload
-        PHP->>Upload: POST /api_v3/.../uploadtoken/.../upload
-        Upload-->>PHP: attachedObjectId
+        Note over PS,EPAPI: PUBLIC API - Session Creation
+        PS->>EPAPI: POST /api/v1/sessions/create
+        EPAPI-->>PS: sessionId: 1_abc123
     end
 
     rect rgb(255, 220, 220)
-        Note over PHP,EPMAPI: INTERNAL API - Speaker Invite
-        PHP->>EPMAPI: POST /epm/eventUsers/inviteUser
-        EPMAPI-->>PHP: userId (hashed)
+        Note over PS,EPMAPI: INTERNAL API - Upload Credentials
+        PS->>EPMAPI: POST /epm/eventUsers/getUploadCredentials
+        EPMAPI-->>PS: uploadTokenId, KS, entryId
+    end
+
+    rect rgb(200, 230, 200)
+        Note over PS,Upload: PUBLIC API - Image Upload
+        PS->>Upload: POST /api_v3/.../uploadtoken/.../upload
+        Upload-->>PS: attachedObjectId
     end
 
     rect rgb(255, 220, 220)
-        Note over PHP,EPMAPI: INTERNAL API - Assign Speaker
-        PHP->>EPMAPI: POST /epm/sessionParticipants/addSpeakers
-        EPMAPI-->>PHP: success
+        Note over PS,EPMAPI: INTERNAL API - Speaker Invite
+        PS->>EPMAPI: POST /epm/eventUsers/inviteUser
+        EPMAPI-->>PS: userId (hashed)
     end
 
-    PHP-->>Form: Success + URLs
-    Form-->>User: ✓ Event created!<br/>EPM URL + KMS URL
+    rect rgb(255, 220, 220)
+        Note over PS,EPMAPI: INTERNAL API - Assign Speaker
+        PS->>EPMAPI: POST /epm/sessionParticipants/addSpeakers
+        EPMAPI-->>PS: success
+    end
+
+    PS-->>KMS: Success + URLs
+    KMS-->>User: Event created with EPM/KMS URLs
 ```
 
 ---
@@ -155,21 +157,16 @@ sequenceDiagram
 ## Technical Stack
 
 ### Frontend
-- **HTML5** with embedded CSS and JavaScript
-- **Design System**: Extracted from Event Platform using Playwright
-- **CSS Framework**: Custom (EP design tokens - colors, spacing, typography)
-- **Rich Text Editor**: Integrated for session descriptions
-- **Validation**: Client-side + server-side
-- **Deployment**: Embedded in KMS page
+- **KMS Page** with Event Platform design system
+- **Design System**: EP design tokens (colors, spacing, typography) extracted via Playwright
+- **POC Reference**: HTML prototype in `frontend/` folder for design testing
 
 ### Backend
+- **PS Module** (Professional Services module)
 - **PHP 7.4+** with strict type declarations
-- **Composer** for dependency management
-- **Architecture**: Helper functions + API proxy pattern
-- **Standards**: PSR-12 coding standards, PHP 8.3+ features
-- **Type Safety**: Strict types, PHPDoc return type arrays
-- **Error Handling**: Try-catch with comprehensive logging
-- **Security**: Environment variable configuration, input validation
+- **Standards**: PSR-12, PHP 8.3+ features
+- **Type Safety**: Strict types, comprehensive PHPDoc
+- **Helper Functions**: 18 functions in `backend/helpers.php` (used within PS module)
 
 ### APIs Integrated
 
@@ -192,37 +189,15 @@ sequenceDiagram
 
 ## Features
 
-### Event Management
+**PS Module capabilities powered by helper functions**:
+
 - ✅ Event creation with template selection
-- ✅ Configure event details (name, description, dates, timezone)
-- ✅ Automatic EPM management URL generation
-- ✅ Automatic KMS public event URL generation
-
-### Session Management (Agenda)
-- ✅ Create multiple sessions (agenda items)
-- ✅ Support multiple session types (LiveWebcast, SimuLive, etc.)
-- ✅ Rich text descriptions
-- ✅ Session scheduling and duration
-
-### Speaker Management
-- ✅ Invite speakers to events
-- ✅ Upload speaker profile images
-- ✅ Assign speakers to sessions
-- ✅ Multi-speaker support per session
-- ✅ Speaker ordering and visibility control
-
-### Media Management
-- ✅ Image uploads from URLs (speaker profiles, landing page)
-- ✅ Video uploads from URLs (SimuLive pre-recorded sessions)
-- ✅ Thumbnail management
-- ✅ 2-step upload workflow (credentials → upload)
-
-### Landing Page Customization
-- ✅ Retrieve current landing page configuration
-- ✅ Update text content blocks
-- ✅ Replace banner images
-- ✅ Update "Two Images" side-by-side components
-- ✅ Preserve existing page structure
+- ✅ Session (agenda) management with multiple types
+- ✅ Speaker invitation and session assignment
+- ✅ Image uploads (speakers, landing page)
+- ✅ Video uploads (SimuLive sessions)
+- ✅ Landing page customization (text, images)
+- ✅ EPM management URL + KMS public URL generation
 
 ---
 
@@ -248,67 +223,54 @@ graph LR
 
 ### Three-Phase Development Process
 
-#### Phase 1: Design System Extraction
+#### Phase 1: Design System Extraction & POC
 **Duration**: 2 days
 
 **Human Input**:
 - Event Platform screenshots
 - Design requirements and specifications
-- UI/UX expectations
 
 **Claude Actions**:
 - Used Playwright skill (`ep-design-extractor`) to extract design system
-- Generated CSS with EP design tokens (colors, spacing, typography, shadows)
-- Created component definitions matching EP interface
+- Generated CSS with EP design tokens (colors, spacing, typography)
+- Built HTML prototype for design testing and validation
 
 **Output**:
 - Design system CSS matching Event Platform
-- Color palette, typography, spacing tokens
+- POC HTML file (`embed-final-noauth.html`) for testing
 - Form component styles
 
 **Human Validation**:
 - Visual review against EP screenshots
-- Design accuracy verification
-- Refinements and adjustments
+- Design testing with HTML prototype
+- Refinements applied
 
-#### Phase 2: PHP Backend Development
+#### Phase 2: PS Module Backend Development
 **Duration**: 1 day
 
 **Human Input**:
 - Complete API documentation (PUBLIC vs INTERNAL endpoints)
 - Scoping requirements document
-- Authentication architecture guidance
+- PS module architecture guidance
 - Security constraints
 
 **Claude Actions**:
-1. Installed PHP professional skills:
-   - `php-pro` - Modern PHP 8.3+ features, Laravel/Symfony patterns
-   - `php-best-practices` - PSR standards, SOLID principles
-2. Generated 15 type-safe helper functions
+1. Installed PHP professional skills: `php-pro`, `php-best-practices`
+2. Generated 18 helper functions for PS module backend
 3. Distinguished API types:
    - **PUBLIC API**: KS authentication
    - **INTERNAL API**: JWT authentication + x-eventId header
-4. Implemented PHP 8+ features:
-   - Strict type declarations (`declare(strict_types=1)`)
-   - Type hints for all parameters and return types
-   - PHPDoc with structured return types
-5. Added comprehensive error handling:
-   - Try-catch blocks
-   - Input validation (email, URL)
-   - Temp file cleanup
-   - Detailed logging
+4. Implemented strict type declarations, comprehensive PHPDoc, error handling
 
 **Output**:
-- Production-ready `helpers.php` (~800 lines)
-- PSR-12 compliant code
-- Comprehensive inline documentation
-- 18 functions total (15 new + 3 utilities)
+- Production-ready `helpers.php` (~800 lines) for PS module
+- PSR-12 compliant, PHP 8.3+ features
+- 18 functions (4 PUBLIC API, 11 INTERNAL API, 3 utilities)
 
 **Human Validation**:
-- Security review (no hardcoded credentials)
+- Security review
 - API logic verification
-- Error handling validation
-- Deployment testing
+- PS module integration testing
 
 #### Phase 3: Integration & Testing
 **Duration**: 1 day
