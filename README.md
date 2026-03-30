@@ -437,6 +437,17 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Built by**: Tom Cohen (Kaltura Solutions) + Claude Code (Opus 4.6)
+## Development Team
+
+**Kaltura Team**:
+- **Tom Cohen** - Solution Engineer, Architecture, Requirements
+- **David Cohen** - Developer (Backend)
+- **Rotem Haziz** - Developer (Frontend)
+- **Shlomit Raivit** - Design
+- **Gonen Radai** - System Architect
+- **Tom Gabay** - EP Director R&D
+
+**AI Collaboration**:
+- **Claude Code (Sonnet 4.5)** - Code Generation, Best Practices, Documentation
 
 **Internal Kaltura Project** - AWS ABM use case
