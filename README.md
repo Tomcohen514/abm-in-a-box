@@ -69,18 +69,17 @@ Before proceeding with development, four solution approaches were evaluated with
 ```mermaid
 graph TB
     User[Event Creator] --> KMS[KMS Page]
-    KMS --> Form[Embedded Event Form<br/>embed-final-noauth.html]
-    Form --> Backend[PHP Backend<br/>helpers.php]
+    KMS --> Form[Embedded Form]
+    Form --> Backend[PHP Backend]
 
-    Backend --> EPAPI[EP Public API<br/>events-api.kaltura.com<br/>🔑 KS Auth]
-    Backend --> EPMAPI[EPM Internal API<br/>epm.kaltura.com<br/>🔑 JWT Auth + x-eventId]
+    Backend --> EPAPI[EP Public API - KS Auth]
+    Backend --> EPMAPI[EPM Internal API - JWT Auth]
 
-    EPAPI --> Events[✓ Create Event<br/>✓ Create Sessions]
-    EPMAPI --> Features[✓ Invite Speakers<br/>✓ Upload Images/Videos<br/>✓ Customize Landing Page<br/>✓ Get EPM/KMS URLs]
+    EPAPI --> Events[Create Event & Sessions]
+    EPMAPI --> Features[Speakers, Uploads, Landing Page, URLs]
 
     Events --> Output[Event Created]
     Features --> Output
-    Output --> URLs[📊 EPM Management URL<br/>🌐 KMS Public Event URL]
 
     style Form fill:#e3f2fd
     style Backend fill:#fff3e0
@@ -359,35 +358,14 @@ Result: Production-Ready Solution
 ## Project Metrics
 
 ### Development Timeline
-- **Design Extraction**: 2 days
-- **Backend Development**: 1 day
-- **Integration & Testing**: 1 day
-- **Total**: ~4 days with Claude Code vs **~10-12 days** traditional development
-- **Time Savings**: **60-70%**
+- **Total**: 4 days with Claude Code vs 10-12 days traditional
+- **Time Savings**: 60-70%
 
 ### Code Statistics
-- **PHP Functions**: 18 total (15 new + 3 utilities)
-- **Lines of Code**: ~800 (helpers.php)
-- **API Endpoints Integrated**:
-  - 4 EP Public API endpoints
-  - 8 EPM Internal API endpoints
-  - 3 Kaltura Upload API endpoints
-- **Convenience Wrappers**: 3 (multi-step workflows combined)
-- **Code Quality**:
-  - ✅ PSR-12 compliant
-  - ✅ Strict type declarations
-  - ✅ Comprehensive PHPDoc
-  - ✅ Input validation
-  - ✅ Error handling
-  - ✅ Security best practices
-
-### Quality Improvements with Claude
-- **Type Safety**: All functions use strict types and type hints
-- **Documentation**: Every function has comprehensive PHPDoc
-- **Error Handling**: Proper try-catch with cleanup
-- **Validation**: Email, URL, array structure validation
-- **Security**: No hardcoded credentials, proper temp file cleanup
-- **Standards**: PSR-12, modern PHP 8.3+ features
+- **PHP Functions**: 18 (15 new + 3 utilities)
+- **Lines of Code**: ~800
+- **API Endpoints**: 15 total (4 PUBLIC, 11 INTERNAL)
+- **Standards**: PSR-12, strict types, PHP 8.3+ features
 
 ---
 
@@ -449,254 +427,45 @@ While Claude Code significantly accelerated development, there were three key ar
 
 ---
 
-## Installation & Setup
-
-### Prerequisites
-- PHP 7.4 or higher
-- Composer
-- Kaltura MediaSpace (KMS) environment
-- Access to Kaltura Event Platform
-
-### Backend Setup
-
-1. **Install Dependencies**
-```bash
-cd backend/
-composer install
-```
-
-2. **Configure Environment**
-```bash
-# Copy example config
-cp config.example.php config.php
-
-# Edit config.php and set:
-# - EPM_JWT_TOKEN (from your EPM account)
-# - EP_API_BASE_URL (your region)
-# - EPM_API_BASE_URL (your region)
-```
-
-3. **Set Permissions**
-```bash
-chmod 755 *.php
-mkdir logs && chmod 777 logs
-```
-
-### Frontend Deployment
-
-1. **Upload to KMS**
-   - Copy `frontend/embed-final-noauth.html` content
-   - Create new KMS page
-   - Paste HTML into page HTML editor
-   - Publish page
-
-2. **Configure Backend Endpoint**
-   - Update form API endpoint in HTML
-   - Point to your PHP backend URL
-
----
-
-## Usage Examples
-
-### Example 1: Create Event and Get URLs
+## Quick Start
 
 ```php
-<?php
-require_once 'backend/helpers.php';
-
-// Step 1: Create event (PUBLIC API)
-$eventData = [
-    'name' => 'AWS Virtual Summit 2026',
-    'description' => 'Exclusive tech briefing for key accounts',
-    'startDate' => '2026-06-15T14:00:00Z',
-    'endDate' => '2026-06-15T17:00:00Z',
-    'timezone' => 'America/New_York',
-    'templateId' => 'tm4000'
-];
-
+// Create event and get URLs
 $eventResult = createEvent($eventData, $ks);
+$urlsResult = getEventUrls($eventResult['eventId']);
+// Returns: epmUrl, kmsUrl
 
-if ($eventResult['success']) {
-    $eventId = $eventResult['eventId'];
-
-    // Step 2: Get EPM and KMS URLs (INTERNAL API)
-    $urlsResult = getEventUrls($eventId);
-
-    if ($urlsResult['success']) {
-        echo "Event Created Successfully!\n\n";
-        echo "Manage Event: {$urlsResult['epmUrl']}\n";
-        echo "Public Event: {$urlsResult['kmsUrl']}\n";
-    }
-}
-```
-
-### Example 2: Create Session with Speaker
-
-```php
-// Step 1: Create session
-$sessionData = [
-    'name' => 'Opening Keynote',
-    'type' => 'LiveWebcast',
-    'startDate' => '2026-06-15T14:00:00Z',
-    'endDate' => '2026-06-15T15:00:00Z',
-    'description' => '<p>Welcome address by CEO</p>'
-];
-
+// Create session with speaker
 $sessionResult = createSession($eventId, $sessionData, $ks);
-$sessionId = $sessionResult['sessionId'];
-
-// Step 2: Upload speaker image and invite
-$imageUrl = 'https://example.com/ceo-photo.jpg';
 $imageResult = uploadSpeakerImageComplete($eventId, $imageUrl);
+$inviteResult = inviteSpeakerToEvent($eventId, $speaker, $imageResult['entryId']);
+addSpeakersToSession($eventId, $sessionId, [['uid' => $inviteResult['userId'], 'order' => 1000]]);
 
-$speaker = [
-    'firstName' => 'Jane',
-    'lastName' => 'Smith',
-    'email' => 'jane.smith@company.com',
-    'title' => 'CEO',
-    'company' => 'Acme Corporation',
-    'bio' => '<p>Technology leader with 20+ years experience</p>'
-];
-
-$inviteResult = inviteSpeakerToEvent(
-    $eventId,
-    $speaker,
-    $imageResult['entryId'],
-    true
-);
-
-// Step 3: Assign speaker to session
-$speakers = [
-    ['uid' => $inviteResult['userId'], 'order' => 1000, 'isHidden' => false]
-];
-
-addSpeakersToSession($eventId, $sessionId, $speakers);
-```
-
-### Example 3: Update Landing Page with Custom Images
-
-```php
-// Step 1: Get current landing page
+// Update landing page
 $pageResult = getEventLandingPage($eventId);
-$components = $pageResult['components'];
-
-// Step 2: Update text content
-$components = updateLandingPageTextContent(
-    $components,
-    '1039159465',  // Text component ID
-    '<div><strong>About the Event</strong></div><div>Join us for an exclusive AWS virtual summit.</div>'
-);
-
-// Step 3: Upload and replace banner image
-$bannerImageUrl = 'https://example.com/event-banner.jpg';
-$bannerResult = uploadLandingPageImageComplete($eventId, $bannerImageUrl);
-$components = replaceBannerImage($components, '100010771', $bannerResult['entryId']);
-
-// Step 4: Upload and replace two side-by-side images
-$leftImageUrl = 'https://example.com/feature-1.jpg';
-$rightImageUrl = 'https://example.com/feature-2.jpg';
-
-$leftResult = uploadLandingPageImageComplete($eventId, $leftImageUrl);
-$rightResult = uploadLandingPageImageComplete($eventId, $rightImageUrl);
-
-$components = replaceTwoImagesComponent(
-    $components,
-    '100038427',  // TwoImages component ID
-    $leftResult['entryId'],
-    $rightResult['entryId']
-);
-
-// Step 5: Save landing page updates
+$components = updateLandingPageTextContent($components, $componentId, $newContent);
 updateEventLandingPage($eventId, 'comingsoon', $components);
 ```
 
 ---
 
-## API Reference
+## API Functions
 
-### Function Summary by API Type
+**18 PHP Helper Functions** in [backend/helpers.php](backend/helpers.php):
+- **4 PUBLIC API**: Event/session creation, uploads (`createEvent`, `createSession`, `uploadImageFromURL`, `uploadVideoFromURL`)
+- **11 INTERNAL API**: Speakers, landing page, credentials, URLs (`inviteSpeakerToEvent`, `addSpeakersToSession`, `getEventUrls`, etc.)
+- **3 Convenience Wrappers**: Multi-step workflows combined
 
-#### 🌐 EP Public API Functions (KS Auth)
-| Function | Endpoint | Purpose |
-|----------|----------|---------|
-| `createEvent()` | `/api/v1/events/create` | Create new event |
-| `createSession()` | `/api/v1/sessions/create` | Create session (agenda item) |
-
-#### 🔐 EPM Internal API Functions (JWT Auth + x-eventId)
-| Function | Endpoint | Purpose |
-|----------|----------|---------|
-| `getEventUrls()` | `/epm/events/list` | Get EPM & KMS URLs |
-| `inviteSpeakerToEvent()` | `/epm/eventUsers/inviteUser` | Invite speaker |
-| `addSpeakersToSession()` | `/epm/sessionParticipants/addSpeakers` | Assign speakers |
-| `getSpeakerImageUploadCredentials()` | `/epm/eventUsers/getUploadCredentials` | Get speaker image creds |
-| `getLandingPageImageUploadCredentials()` | `/epm/settings/getUploadCredentials` | Get LP image creds |
-| `getVideoUploadCredentials()` | `/epm/media/getBulkMediaCredentials` | Get video creds |
-| `getEventLandingPage()` | `/epm/pageBuilder/getEventPage` | Get landing page config |
-| `updateEventLandingPage()` | `/epm/pageBuilder/updateEventPage` | Update landing page |
-
-#### 🎨 Landing Page Helper Functions
-| Function | Purpose |
-|----------|---------|
-| `updateLandingPageTextContent()` | Update text blocks |
-| `replaceBannerImage()` | Replace banner with `replaceImageEntry` |
-| `replaceTwoImagesComponent()` | Replace side-by-side images |
-| `findLandingPageComponent()` | Find component by type and ID |
-
-#### ⚡ Convenience Wrappers (Multi-Step Combined)
-| Function | Combines |
-|----------|----------|
-| `uploadSpeakerImageComplete()` | Get creds (INTERNAL) + Upload (PUBLIC) |
-| `uploadLandingPageImageComplete()` | Get creds (INTERNAL) + Upload (PUBLIC) |
-| `uploadVideoComplete()` | Get creds (INTERNAL) + Upload (PUBLIC) |
+All functions include strict types, comprehensive PHPDoc, and error handling.
 
 ---
 
-## Project Structure
+## Future Improvements
 
-```
-abm-in-a-box/
-├── README.md                          # This file
-├── LICENSE                            # MIT License
-├── .gitignore                         # Git exclusions
-├── frontend/
-│   └── embed-final-noauth.html       # Production embed form (75 KB)
-├── backend/
-│   ├── helpers.php                   # 18 PHP helper functions (~800 lines)
-│   ├── config.example.php            # Configuration template
-│   └── composer.json                 # PHP dependencies
-└── docs/
-    └── (future: API detailed docs)
-```
-
----
-
-## Contributing & Roadmap
-
-### Future Enhancements
-
-**Short-Term**:
-- Additional EP features (registrations, analytics)
-- Enhanced error reporting and debugging
-- More landing page component helpers
-
-**Medium-Term**:
-- PS module generation with Claude + Kaltura codebase access
-- Authentication workflow templates
-- Automated testing suite
-
-**Long-Term**:
-- Figma plugin for live design system sync
-- AI-powered event optimization recommendations
-- Integration with other Kaltura products
-
-### How to Contribute
-
-This project demonstrates human-AI collaboration patterns. Future contributors can:
-
-1. **Extend functionality**: Add more EP API integrations
-2. **Improve documentation**: Enhance code examples and guides
-3. **Share learnings**: Document Claude Code collaboration patterns
-4. **Suggest improvements**: Identify areas where Claude could be more effective
+**What Claude Could Do With More Access**:
+1. **PS Module Generation** - With GitHub access to Kaltura PS codebase
+2. **Secure Auth Workflows** - With vetted authentication templates
+3. **Figma Integration** - With Figma API access for live design sync
 
 ---
 
@@ -706,26 +475,6 @@ MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 
-## Acknowledgments
+**Built by**: Tom Cohen (Kaltura Solutions) + Claude Code (Opus 4.6)
 
-**Development Team**:
-- Tom Cohen - Solution Engineer, Architecture, Requirements
-- Claude Code (Opus 4.6) - Code Generation, Best Practices, Documentation
-
-**Skills Used**:
-- `php-pro` - Modern PHP development patterns
-- `php-best-practices` - PSR standards and SOLID principles
-- `ep-design-extractor` - Event Platform design system extraction
-- `diagram-generator` - Technical diagrams and flows
-
-**Built with**: [Claude Code](https://claude.ai/code) by Anthropic
-
----
-
-## Support & Contact
-
-For questions or issues related to this project:
-- **Internal**: Contact Kaltura Solutions Team
-- **Issues**: Use GitHub Issues for bug reports and feature requests
-
-**Note**: This is an internal Kaltura project for AWS ABM use case. Not for external distribution.
+**Internal Kaltura Project** - AWS ABM use case
