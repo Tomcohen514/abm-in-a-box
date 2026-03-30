@@ -1,0 +1,20 @@
+{
+    "name": "kaltura/aws-event-in-a-box",
+    "description": "AWS Event-in-a-Box KMS Backend",
+    "type": "project",
+    "require": {
+        "php": ">=7.4",
+        "kaltura/api-client-library": "^18.0"
+    },
+    "autoload": {
+        "files": [
+            "includes/config.php",
+            "includes/helpers.php"
+        ]
+    },
+    "scripts": {
+        "post-install-cmd": [
+            "@php -r \"if (!file_exists('includes/config.php')) { copy('includes/config.example.php', 'includes/config.php'); echo 'Created config.php from template. Please edit with your credentials.\\n'; }\""
+        ]
+    }
+}

@@ -1,0 +1,42 @@
+# Dependencies
+/backend/vendor/
+node_modules/
+
+# Environment & Configuration
+.env
+.env.*
+config.php
+**/config.php
+!config.example.php
+
+# Logs
+*.log
+logs/
+/backend/logs/
+
+# Secrets & Credentials
+*.pem
+*.key
+*.p12
+*.pfx
+bearer-token.txt
+credentials.txt
+secrets/
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Build outputs
+dist/
+build/
