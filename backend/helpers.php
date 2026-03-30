@@ -361,8 +361,7 @@ function createEvent(array $eventData, string $ks): array
             'endDate' => $eventData['endDate'],
             'timezone' => $eventData['timezone'],
             'description' => $eventData['description'] ?? '',
-            'templateId' => $eventData['templateId'] ?? null,
-            'doorsOpenDate' => $eventData['doorsOpenDate'] ?? null
+            'templateId' => $eventData['templateId'] ?? null
         ];
 
         // Remove null values
