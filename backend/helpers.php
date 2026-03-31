@@ -11,6 +11,12 @@ declare(strict_types=1);
  *
  * Authentication is handled separately - JWT token is provided via config/session
  *
+ * IMPORTANT - Event ID Terminology:
+ * - Kaltura Event ID (virtualEventID): Integer, e.g., 2661602
+ *   Used with EP Public API (/api/v1/events/create)
+ * - EPM Event ID (epmId): MongoDB ObjectID string, e.g., "69ca488af53a75439124f3a9"
+ *   Used with EPM Internal API as x-eventId header
+ *
  * @package AWS_Event_in_a_Box
  * @author  Kaltura Solutions Team
  * @version 1.0.0
@@ -166,10 +172,10 @@ function getJWTToken(): string
  *
  * @param string $endpoint API endpoint (e.g., '/epm/eventUsers/inviteUser')
  * @param array|string $payload Request payload
- * @param string|null $eventId Optional event ID for x-eventId header
+ * @param string|null $epmId Optional EPM event ID (MongoDB ObjectID) for x-eventId header
  * @return string JSON response
  */
-function callEPMAPI(string $endpoint, $payload, ?string $eventId = null): string
+function callEPMAPI(string $endpoint, $payload, ?string $epmId = null): string
 {
     $url = EPM_API_BASE_URL . $endpoint;
     $jwt = getJWTToken();
@@ -188,8 +194,8 @@ function callEPMAPI(string $endpoint, $payload, ?string $eventId = null): string
         'Content-Length: ' . strlen($jsonPayload)
     ];
 
-    if ($eventId !== null) {
-        $headers[] = 'x-eventId: ' . $eventId;
+    if ($epmId !== null) {
+        $headers[] = 'x-eventId: ' . $epmId;
     }
 
     $ch = curl_init($url);
@@ -588,14 +594,14 @@ function createSession(string $eventId, array $sessionData, string $ks): array
  * API Type: INTERNAL
  * Endpoint: POST /epm/eventUsers/inviteUser
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param array $speakerData Speaker information (firstName, lastName, email, title, company, bio, roles)
  * @param string|null $imageEntryId Optional Kaltura entry ID for speaker image
  * @param bool $skipEmail Whether to skip invitation email
  * @return array{success: bool, userId: string|null, error: string|null}
  */
 function inviteSpeakerToEvent(
-    string $eventId,
+    string $epmId,
     array $speakerData,
     ?string $imageEntryId = null,
     bool $skipEmail = true
@@ -641,12 +647,12 @@ function inviteSpeakerToEvent(
         }
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/eventUsers/inviteUser', $payload, $eventId);
+        $result = callEPMAPI('/epm/eventUsers/inviteUser', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
             logAudit('SPEAKER_INVITED', $speakerData['email'], [
-                'eventId' => $eventId,
+                'epmId' => $epmId,
                 'userId' => $data['userId']
             ]);
 
@@ -681,12 +687,12 @@ function inviteSpeakerToEvent(
  * API Type: INTERNAL
  * Endpoint: POST /epm/sessionParticipants/addSpeakers
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param string $sessionId Session ID
  * @param array $speakersArray Array of speakers: [['uid' => userId, 'order' => 1000, 'isHidden' => false], ...]
  * @return array{success: bool, error: string|null}
  */
-function addSpeakersToSession(string $eventId, string $sessionId, array $speakersArray): array
+function addSpeakersToSession(string $epmId, string $sessionId, array $speakersArray): array
 {
     try {
         if (empty($sessionId)) {
@@ -710,12 +716,12 @@ function addSpeakersToSession(string $eventId, string $sessionId, array $speaker
         ];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/sessionParticipants/addSpeakers', $payload, $eventId);
+        $result = callEPMAPI('/epm/sessionParticipants/addSpeakers', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
             logAudit('SPEAKERS_ADDED_TO_SESSION', 'system', [
-                'eventId' => $eventId,
+                'epmId' => $epmId,
                 'sessionId' => $sessionId,
                 'count' => count($speakersArray)
             ]);
@@ -743,17 +749,17 @@ function addSpeakersToSession(string $eventId, string $sessionId, array $speaker
  * API Type: INTERNAL
  * Endpoint: POST /epm/eventUsers/getUploadCredentials
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param string|null $contextId Optional context ID
  * @return array{success: bool, ks?: string, uploadTokenId?: string, entryId?: string, serviceURL?: string, error?: string}
  */
-function getSpeakerImageUploadCredentials(string $eventId, ?string $contextId = null): array
+function getSpeakerImageUploadCredentials(string $epmId, ?string $contextId = null): array
 {
     try {
         $payload = ['contextId' => $contextId ?? ''];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/eventUsers/getUploadCredentials', $payload, $eventId);
+        $result = callEPMAPI('/epm/eventUsers/getUploadCredentials', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
@@ -860,16 +866,16 @@ function uploadImageFromURL(string $uploadTokenId, string $ks, string $imageUrl)
  * API Type: INTERNAL
  * Endpoint: POST /epm/settings/getUploadCredentials
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @return array{success: bool, ks?: string, uploadTokenId?: string, entryId?: string, serviceURL?: string, error?: string}
  */
-function getLandingPageImageUploadCredentials(string $eventId): array
+function getLandingPageImageUploadCredentials(string $epmId): array
 {
     try {
         $payload = ['contextId' => ''];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/settings/getUploadCredentials', $payload, $eventId);
+        $result = callEPMAPI('/epm/settings/getUploadCredentials', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
@@ -903,13 +909,13 @@ function getLandingPageImageUploadCredentials(string $eventId): array
  * API Type: INTERNAL
  * Endpoint: POST /epm/media/getBulkMediaCredentials
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param string $videoName Name for the video
  * @param string $mediaType Media type (default: 'video')
  * @return array{success: bool, ks?: string, uploadTokenId?: string, entryId?: string, serviceURL?: string, error?: string}
  */
 function getVideoUploadCredentials(
-    string $eventId,
+    string $epmId,
     string $videoName = 'Video',
     string $mediaType = 'video'
 ): array {
@@ -924,7 +930,7 @@ function getVideoUploadCredentials(
         ];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/media/getBulkMediaCredentials', $payload, $eventId);
+        $result = callEPMAPI('/epm/media/getBulkMediaCredentials', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok' && !empty($data['uploadCredentials'])) {
@@ -1036,17 +1042,17 @@ function uploadVideoFromURL(string $uploadTokenId, string $ks, string $videoUrl)
  * API Type: INTERNAL
  * Endpoint: POST /epm/pageBuilder/getEventPage
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param string $pageId Page identifier (default: 'comingsoon')
  * @return array{success: bool, components: array|null, error: string|null}
  */
-function getEventLandingPage(string $eventId, string $pageId = 'comingsoon'): array
+function getEventLandingPage(string $epmId, string $pageId = 'comingsoon'): array
 {
     try {
         $payload = ['pageId' => $pageId];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/pageBuilder/getEventPage', $payload, $eventId);
+        $result = callEPMAPI('/epm/pageBuilder/getEventPage', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
@@ -1069,12 +1075,12 @@ function getEventLandingPage(string $eventId, string $pageId = 'comingsoon'): ar
  * API Type: INTERNAL
  * Endpoint: POST /epm/pageBuilder/updateEventPage
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID) - use for x-eventId header
  * @param string $pageId Page identifier (e.g., 'comingsoon')
  * @param array $components Array of page components to update
  * @return array{success: bool, error: string|null}
  */
-function updateEventLandingPage(string $eventId, string $pageId, array $components): array
+function updateEventLandingPage(string $epmId, string $pageId, array $components): array
 {
     try {
         if (empty($components)) {
@@ -1087,11 +1093,11 @@ function updateEventLandingPage(string $eventId, string $pageId, array $componen
         ];
 
         // Call EPM INTERNAL API
-        $result = callEPMAPI('/epm/pageBuilder/updateEventPage', $payload, $eventId);
+        $result = callEPMAPI('/epm/pageBuilder/updateEventPage', $payload, $epmId);
         $data = json_decode($result, true);
 
         if (isset($data['status']) && $data['status'] === 'ok') {
-            logAudit('LANDING_PAGE_UPDATED', 'system', ['eventId' => $eventId, 'pageId' => $pageId]);
+            logAudit('LANDING_PAGE_UPDATED', 'system', ['epmId' => $epmId, 'pageId' => $pageId]);
             return ['success' => true, 'error' => null];
         }
 
@@ -1228,15 +1234,15 @@ function findLandingPageComponent(array $components, string $type, string $compo
  *
  * Combines: getSpeakerImageUploadCredentials() + uploadImageFromURL()
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID)
  * @param string $imageUrl URL to download image from
  * @param string|null $contextId Optional context ID
  * @return array{success: bool, entryId: string|null, error: string|null}
  */
-function uploadSpeakerImageComplete(string $eventId, string $imageUrl, ?string $contextId = null): array
+function uploadSpeakerImageComplete(string $epmId, string $imageUrl, ?string $contextId = null): array
 {
     // Step 1: Get credentials (INTERNAL API)
-    $credResult = getSpeakerImageUploadCredentials($eventId, $contextId);
+    $credResult = getSpeakerImageUploadCredentials($epmId, $contextId);
 
     if (!$credResult['success']) {
         return ['success' => false, 'entryId' => null, 'error' => $credResult['error']];
@@ -1258,14 +1264,14 @@ function uploadSpeakerImageComplete(string $eventId, string $imageUrl, ?string $
  *
  * Combines: getLandingPageImageUploadCredentials() + uploadImageFromURL()
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID)
  * @param string $imageUrl URL to download image from
  * @return array{success: bool, entryId: string|null, error: string|null}
  */
-function uploadLandingPageImageComplete(string $eventId, string $imageUrl): array
+function uploadLandingPageImageComplete(string $epmId, string $imageUrl): array
 {
     // Step 1: Get credentials (INTERNAL API)
-    $credResult = getLandingPageImageUploadCredentials($eventId);
+    $credResult = getLandingPageImageUploadCredentials($epmId);
 
     if (!$credResult['success']) {
         return ['success' => false, 'entryId' => null, 'error' => $credResult['error']];
@@ -1286,15 +1292,15 @@ function uploadLandingPageImageComplete(string $eventId, string $imageUrl): arra
  *
  * Combines: getVideoUploadCredentials() + uploadVideoFromURL()
  *
- * @param string $eventId Event ID
+ * @param string $epmId EPM event ID (MongoDB ObjectID)
  * @param string $videoUrl URL to download video from
  * @param string $videoName Name for the video
  * @return array{success: bool, entryId: string|null, uploadTokenId: string|null, error: string|null}
  */
-function uploadVideoComplete(string $eventId, string $videoUrl, string $videoName = 'Video'): array
+function uploadVideoComplete(string $epmId, string $videoUrl, string $videoName = 'Video'): array
 {
     // Step 1: Get credentials (INTERNAL API)
-    $credResult = getVideoUploadCredentials($eventId, $videoName);
+    $credResult = getVideoUploadCredentials($epmId, $videoName);
 
     if (!$credResult['success']) {
         return [
