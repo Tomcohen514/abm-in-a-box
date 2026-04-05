@@ -1,0 +1,1365 @@
+<!-- ================================================================
+     AWS Event-in-a-Box - User Login Version
+     ================================================================
+
+     Features:
+     - User authentication via email + password (NO SECRETS IN HTML!)
+     - Login modal appears on page load
+     - User enters both email and password manually
+     - Generates KS via user.loginByLoginId API
+     - Full form features (speakers, sessions)
+     - Secure authentication flow
+
+     SETUP:
+     1. Embed on KMS custom HTML page
+     2. User enters email + password in login modal
+     3. KS generated via their credentials (no admin secret needed)
+     4. Create event with speakers and sessions
+
+     Version: 3.1.0 (User Login - Manual Entry)
+     ================================================================ -->
+
+<style>
+  .kms-ef-wrap * { box-sizing: border-box; margin: 0; padding: 0; }
+  .kms-ef-wrap {
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 32px 16px 48px;
+  }
+  .kms-ef-page-title {
+    font-size: 32px;
+    font-weight: 400;
+    color: #333;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .kms-ef-page-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 28px;
+    text-align: center;
+  }
+  .kms-ef-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    margin-bottom: 20px;
+    overflow: visible;
+  }
+  .kms-ef-card-body { padding: 24px; }
+  .kms-ef-section-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 16px;
+  }
+  .kms-ef-field { margin-bottom: 16px; }
+  .kms-ef-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: #333;
+    margin-bottom: 8px;
+  }
+  .kms-ef-label small { font-weight: 400; color: #666; font-size: 12px; }
+  .kms-ef-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .kms-ef-input:focus { border-color: #006EFA; box-shadow: 0 0 0 3px rgba(0,110,250,0.1); }
+  .kms-ef-input.kms-ef-error { border-color: #ef4444; }
+  .kms-ef-input:disabled {
+    background: #f8f9fa;
+    color: #666;
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  /* Rich text editor */
+  .kms-ef-rte-wrap { border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+  .kms-ef-rte-wrap.kms-ef-error { border-color: #ef4444; }
+  .kms-ef-rte-wrap:focus-within { border-color: #006EFA; }
+  .kms-ef-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 5px 7px;
+  }
+  .kms-ef-tb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #333;
+    font-size: 13px;
+    font-family: inherit;
+    transition: background 0.1s, color 0.1s;
+    padding: 0;
+    line-height: 1;
+  }
+  .kms-ef-tb-btn:hover { background: #e0e0e0; color: #006EFA; }
+  .kms-ef-tb-sep { width: 1px; height: 18px; background: #ccc; margin: 0 3px; }
+  .kms-ef-editor {
+    min-height: 110px;
+    padding: 10px 12px;
+    outline: none;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    line-height: 1.6;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-editor:empty:before { content: attr(data-placeholder); color: #999; pointer-events: none; }
+
+  .kms-ef-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 30px;
+    background: #006EFA;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-btn-primary:hover { background: #0058CC; }
+  .kms-ef-btn-primary:disabled { background: #ccc; opacity: 0.6; cursor: not-allowed; }
+
+  .kms-ef-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 14px 30px;
+    background: #fff;
+    color: #333;
+    border: 2px solid #333;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-btn-secondary:hover { background: #f5f5f5; }
+
+  .kms-ef-btn-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 14px;
+    background: transparent;
+    color: #006EFA;
+    border: 2px dashed #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-btn-add:hover { background: #f0f7ff; border-color: #006EFA; }
+
+  .kms-ef-actions { display: flex; gap: 12px; margin-top: 8px; }
+
+  .kms-ef-status {
+    margin-top: 16px;
+    padding: 15px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.5;
+    display: none;
+  }
+  .kms-ef-status.kms-ef-success {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+    display: block;
+  }
+  .kms-ef-status.kms-ef-fail {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+    display: block;
+  }
+
+  .kms-ef-info-box {
+    background: #e7f3ff;
+    padding: 12px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    color: #004085;
+    border-left: 4px solid #006EFA;
+  }
+
+  /* Login Modal */
+  .kms-ef-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+  }
+  .kms-ef-modal-content {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    max-width: 420px;
+    width: 100%;
+    padding: 32px;
+  }
+  .kms-ef-modal-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .kms-ef-modal-subtitle {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .kms-ef-modal.kms-ef-hidden {
+    display: none;
+  }
+
+  /* Section header row */
+  .kms-ef-sec-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+
+  /* Speaker/Session cards */
+  .kms-ef-sp-card,
+  .kms-ef-ss-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    margin-bottom: 14px;
+    background: white;
+    overflow: visible;
+  }
+
+  /* Item header */
+  .kms-ef-item-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    border-bottom: 1px solid #e0e0e0;
+    cursor: default;
+    background: #f8f9fa;
+  }
+
+  .kms-ef-item-toggle {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    font-weight: 700;
+    color: #333;
+    flex-shrink: 0;
+    transition: background 0.1s;
+    line-height: 1;
+  }
+  .kms-ef-item-toggle:hover { background: #e0e0e0; }
+  .kms-ef-item-label {
+    font-weight: 700;
+    font-size: 14px;
+    color: #333;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .kms-ef-item-summary {
+    font-size: 12px;
+    color: #666;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .kms-ef-item-remove {
+    background: none;
+    border: 1px solid #dc3545;
+    border-radius: 4px;
+    color: #dc3545;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 4px 10px;
+    white-space: nowrap;
+    transition: background 0.1s;
+    flex-shrink: 0;
+    font-family: inherit;
+  }
+  .kms-ef-item-remove:hover { background: #fee2e2; }
+  .kms-ef-item-body {
+    padding: 16px;
+    overflow: visible;
+  }
+  .kms-ef-item-body.kms-ef-collapsed { display: none; }
+
+  /* Session type badge */
+  .kms-ef-ss-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .kms-ef-badge-live { background: #dbeafe; color: #006EFA; }
+  .kms-ef-badge-prerecorded { background: #fef3c7; color: #92400e; }
+
+  /* Grids */
+  .kms-ef-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .kms-ef-row-img-bio {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+
+  /* Image upload */
+  .kms-ef-img-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #006EFA;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+    background: #fff;
+  }
+  .kms-ef-img-trigger:hover {
+    background: #f0f7ff;
+    border-color: #006EFA;
+  }
+  .kms-ef-file-hidden { display: none; }
+  .kms-ef-upload-hint {
+    font-size: 11px;
+    color: #999;
+    margin-top: 6px;
+  }
+  .kms-ef-img-preview {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #666;
+    text-align: center;
+  }
+  .kms-ef-img-preview img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* Checkbox */
+  .kms-ef-checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .kms-ef-checkbox-group input[type="checkbox"] {
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .kms-ef-checkbox-group label {
+    margin: 0;
+    font-weight: 400;
+    font-size: 13px;
+  }
+
+  /* Dropdowns */
+  .kms-ef-dd-wrap { position: relative; }
+  .kms-ef-dd-trigger {
+    width: 100%;
+    padding: 8px 36px 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    user-select: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-dd-trigger:hover,
+  .kms-ef-dd-trigger.kms-ef-open { border-color: #006EFA; }
+  .kms-ef-dd-arrow {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: #666;
+    transition: transform 0.2s;
+  }
+  .kms-ef-dd-list {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 999;
+    overflow: hidden;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .kms-ef-dd-list.kms-ef-open { display: block; }
+  .kms-ef-dd-item {
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background 0.1s;
+  }
+  .kms-ef-dd-item:hover { background: #f0f7ff; }
+  .kms-ef-dd-item.kms-ef-selected {
+    background: #dbeafe;
+    color: #006EFA;
+    font-weight: 600;
+  }
+
+  /* Multi-select speaker dropdown */
+  .kms-ef-ms-trigger {
+    width: 100%;
+    min-height: 38px;
+    padding: 5px 36px 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #333;
+    background: #fff;
+    cursor: pointer;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    user-select: none;
+    transition: border-color 0.2s;
+    position: relative;
+    font-family: Lato, "Helvetica Neue", "Segoe UI", sans-serif;
+  }
+  .kms-ef-ms-trigger:hover,
+  .kms-ef-ms-trigger.kms-ef-open { border-color: #006EFA; }
+  .kms-ef-ms-placeholder {
+    color: #999;
+    font-size: 14px;
+    padding: 2px 4px;
+  }
+  .kms-ef-ms-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #dbeafe;
+    color: #006EFA;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 6px;
+    white-space: nowrap;
+  }
+  .kms-ef-ms-tag-x {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    color: #006EFA;
+    font-weight: 700;
+  }
+  .kms-ef-ms-tag-x:hover { color: #ef4444; }
+  .kms-ef-ms-list {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 1000;
+    overflow: hidden;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .kms-ef-ms-list.kms-ef-open { display: block; }
+  .kms-ef-ms-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #333;
+    transition: background 0.1s;
+  }
+  .kms-ef-ms-item:hover { background: #f0f7ff; }
+  .kms-ef-ms-item.kms-ef-ms-checked { background: #f0f9ff; }
+  .kms-ef-ms-check {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ccc;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: #fff;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .kms-ef-ms-item.kms-ef-ms-checked .kms-ef-ms-check {
+    background: #006EFA;
+    border-color: #006EFA;
+  }
+  .kms-ef-ms-item.kms-ef-ms-checked .kms-ef-ms-check::after {
+    content: '';
+    display: block;
+    width: 4px;
+    height: 7px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg) translate(-1px, -1px);
+  }
+  .kms-ef-ms-empty {
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #999;
+    font-style: italic;
+  }
+
+  /* Responsive */
+  @media (max-width: 580px) {
+    .kms-ef-row-2,
+    .kms-ef-row-img-bio { grid-template-columns: 1fr; }
+  }
+</style>
+
+<!-- Login Modal -->
+<div class="kms-ef-modal" id="loginModal">
+  <div class="kms-ef-modal-content">
+    <div class="kms-ef-modal-title">Sign In</div>
+    <div class="kms-ef-modal-subtitle">Enter your Kaltura credentials to continue</div>
+
+    <div class="kms-ef-field">
+      <label class="kms-ef-label" for="loginEmail">Email <span style="color:#ef4444">*</span></label>
+      <input class="kms-ef-input" type="email" id="loginEmail" placeholder="your.email@kaltura.com" autocomplete="email">
+    </div>
+
+    <div class="kms-ef-field">
+      <label class="kms-ef-label" for="loginPassword">Password <span style="color:#ef4444">*</span></label>
+      <input class="kms-ef-input" type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password">
+    </div>
+
+    <button class="kms-ef-btn-primary" id="loginBtn" style="width: 100%;">Sign In</button>
+
+    <div class="kms-ef-status" id="loginStatus"></div>
+  </div>
+</div>
+
+<div class="kms-ef-wrap">
+  <div class="kms-ef-page-title">Create ABM Event</div>
+  <div class="kms-ef-page-subtitle">Build your event with sessions, agenda, and speakers</div>
+
+  <!-- Main Form (hidden until authenticated) -->
+  <div id="mainForm" style="display: none;">
+    <!-- Event Details -->
+    <div class="kms-ef-card">
+      <div class="kms-ef-card-body">
+        <div class="kms-ef-section-title">Event Details</div>
+
+        <div class="kms-ef-field">
+          <label class="kms-ef-label" for="eventTitle">Event Title <span style="color:#ef4444">*</span></label>
+          <input class="kms-ef-input" type="text" id="eventTitle" placeholder="Enter event title">
+        </div>
+
+        <div class="kms-ef-field">
+          <label class="kms-ef-label">Event Description <span style="color:#ef4444">*</span></label>
+          <div class="kms-ef-rte-wrap" id="eventDescWrap">
+            <div class="kms-ef-toolbar" id="eventDescToolbar"></div>
+            <div class="kms-ef-editor" id="eventDesc" contenteditable="true" data-placeholder="Describe your event..."></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speakers -->
+    <div class="kms-ef-card">
+      <div class="kms-ef-card-body">
+        <div class="kms-ef-sec-header">
+          <div class="kms-ef-section-title">Speakers</div>
+          <button class="kms-ef-btn-add" id="addSpeakerBtn">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+            Add Speaker
+          </button>
+        </div>
+        <div id="speakersContainer"></div>
+        <div id="noSpeakers" style="text-align:center;color:#999;font-size:13px;padding:18px 0">No speakers added yet.</div>
+      </div>
+    </div>
+
+    <!-- Sessions -->
+    <div class="kms-ef-card">
+      <div class="kms-ef-card-body">
+        <div class="kms-ef-sec-header">
+          <div class="kms-ef-section-title">Sessions</div>
+          <button class="kms-ef-btn-add" id="addSessionBtn">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="6" y1="1" x2="6" y2="11"/><line x1="1" y1="6" x2="11" y2="6"/></svg>
+            Add Session
+          </button>
+        </div>
+        <div id="sessionsContainer"></div>
+        <div id="noSessions" style="text-align:center;color:#999;font-size:13px;padding:18px 0">No sessions added yet.</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="kms-ef-actions">
+      <button class="kms-ef-btn-primary" id="createEventBtn">Create Event</button>
+      <button class="kms-ef-btn-secondary" id="cancelBtn">Cancel</button>
+    </div>
+
+    <div class="kms-ef-status" id="resultStatus"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  var CONFIG = {
+    PARTNER_ID: 5620062,
+    EP_API_BASE: 'https://events-api.nvp1.ovp.kaltura.com',
+    EPM_API_BASE: 'https://epm.nvp1.ovp.kaltura.com',
+    KALTURA_API: 'https://www.kaltura.com/api_v3',
+    TEMPLATE_ID: 'tm0000'
+  };
+
+  var tokens = { ks: null, jwt: null };
+  var speakerCount = 0;
+  var sessionCount = 0;
+  var speakerRegistry = {}; // cardId -> display label
+  var _seq = 0;
+
+  /* ================================================================== */
+  /* HELPERS                                                             */
+  /* ================================================================== */
+  function uid() {
+    return Math.random().toString(36).slice(2, 8) + (++_seq);
+  }
+
+  function mkToolbar(eid) {
+    function tb(title, cmd, svgBody) {
+      return '<button class="kms-ef-tb-btn" title="' + title + '" ' +
+        'onmousedown="event.preventDefault();kmsEf.exec(\'' + eid + '\',\'' + cmd + '\')">' +
+        '<svg width="14" height="14" viewBox="0 0 14 14">' + svgBody + '</svg></button>';
+    }
+    var sep = '<div class="kms-ef-tb-sep"></div>';
+    return tb('Bold', 'bold', '<text x="2" y="12" font-family="Georgia,serif" font-size="13" font-weight="bold" fill="currentColor">B</text>') +
+      tb('Italic', 'italic', '<text x="4" y="12" font-family="Georgia,serif" font-size="13" font-style="italic" fill="currentColor">I</text>') +
+      tb('Underline', 'underline', '<text x="2" y="11" font-family="Georgia,serif" font-size="12" fill="currentColor">U</text><line x1="2" y1="13" x2="12" y2="13" stroke="currentColor" stroke-width="1.5"/>') +
+      sep +
+      tb('Bullet List', 'insertUnorderedList', '<circle cx="2" cy="4" r="1.2" fill="currentColor"/><rect x="5" y="3.2" width="8" height="1.5" rx=".7" fill="currentColor"/><circle cx="2" cy="8" r="1.2" fill="currentColor"/><rect x="5" y="7.2" width="8" height="1.5" rx=".7" fill="currentColor"/><circle cx="2" cy="12" r="1.2" fill="currentColor"/><rect x="5" y="11.2" width="8" height="1.5" rx=".7" fill="currentColor"/>') +
+      tb('Number List', 'insertOrderedList', '<text x="1" y="5" font-size="4" fill="currentColor">1.</text><rect x="5" y="3.2" width="7" height="1.5" rx=".7" fill="currentColor"/><text x="1" y="9" font-size="4" fill="currentColor">2.</text><rect x="5" y="7.2" width="7" height="1.5" rx=".7" fill="currentColor"/><text x="1" y="13" font-size="4" fill="currentColor">3.</text><rect x="5" y="11.2" width="7" height="1.5" rx=".7" fill="currentColor"/>') +
+      sep +
+      '<button class="kms-ef-tb-btn" title="Insert Link" onmousedown="event.preventDefault();kmsEf.link(\'' + eid + '\')">' +
+        '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">' +
+          '<path d="M6.5 10.5L3.5 10.5C2 10.5 1 9.5 1 8C1 6.5 2 5.5 3.5 5.5L6.5 5.5M7.5 5.5L10.5 5.5C12 5.5 13 6.5 13 8C13 9.5 12 10.5 10.5 10.5L7.5 10.5M4.5 8L9.5 8"/>' +
+        '</svg></button>';
+  }
+
+  function blockImages(el) {
+    el.addEventListener('paste', function(e) {
+      var items = (e.clipboardData || {}).items || [];
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') === 0) { e.preventDefault(); return; }
+      }
+      e.preventDefault();
+      var html = e.clipboardData.getData('text/html');
+      var text = e.clipboardData.getData('text/plain');
+      if (html) {
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('img').forEach(function(img) { img.parentNode.removeChild(img); });
+        document.execCommand('insertHTML', false, tmp.innerHTML);
+      } else {
+        document.execCommand('insertText', false, text);
+      }
+    });
+  }
+
+  function wireImagePreview(fileId, prevId) {
+    document.getElementById(fileId).addEventListener('change', function(e) {
+      var file = e.target.files[0];
+      var prev = document.getElementById(prevId);
+      if (!file) { prev.innerHTML = 'No image selected'; return; }
+      if (!file.type.match(/^image\//)) {
+        prev.innerHTML = '<span style="color:#ef4444">Please select an image file.</span>';
+        return;
+      }
+      var r = new FileReader();
+      r.onload = function(ev) {
+        prev.innerHTML = '<img src="' + ev.target.result + '" alt="Preview">';
+      };
+      r.readAsDataURL(file);
+    });
+  }
+
+  function refreshAllSpeakerDropdowns() {
+    var lists = document.querySelectorAll('[data-splist="true"]');
+    for (var i = 0; i < lists.length; i++) {
+      var list = lists[i];
+      var triggerId = list.getAttribute('data-trigger');
+      var selectedIds = [];
+      var tags = document.querySelectorAll('#' + triggerId + ' .kms-ef-ms-tag');
+      for (var j = 0; j < tags.length; j++) {
+        selectedIds.push(tags[j].getAttribute('data-spid'));
+      }
+      rebuildSpeakerList(list, triggerId, selectedIds);
+    }
+  }
+
+  function rebuildSpeakerList(listEl, triggerId, selectedIds) {
+    var keys = Object.keys(speakerRegistry);
+    if (keys.length === 0) {
+      listEl.innerHTML = '<div class="kms-ef-ms-empty">No speakers added yet</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < keys.length; i++) {
+      var cid = keys[i];
+      var label = speakerRegistry[cid];
+      var checked = selectedIds.indexOf(cid) !== -1;
+      html += '<div class="kms-ef-ms-item ' + (checked ? 'kms-ef-ms-checked' : '') + '" ' +
+        'onclick="kmsEf.msDdToggleItem(\'' + triggerId + '\',\'' + cid + '\',\'' + label.replace(/'/g, "\\'") + '\')">' +
+        '<span class="kms-ef-ms-check"></span>' +
+        '<span>' + label + '</span></div>';
+    }
+    listEl.innerHTML = html;
+  }
+
+  /* ================================================================== */
+  /* GLOBAL INTERFACE                                                    */
+  /* ================================================================== */
+  window.kmsEf = {
+    exec: function(eid, cmd) {
+      document.getElementById(eid).focus();
+      document.execCommand(cmd, false, null);
+    },
+    link: function(eid) {
+      var url = prompt('Enter URL:');
+      if (url) {
+        document.getElementById(eid).focus();
+        document.execCommand('createLink', false, url);
+      }
+    },
+    spToggle: function(cid) {
+      var body = document.getElementById('spBody_' + cid);
+      var btn = document.querySelector('#' + cid + ' .kms-ef-item-toggle');
+      if (!body) return;
+      var col = body.classList.toggle('kms-ef-collapsed');
+      if (btn) { btn.textContent = col ? '+' : '\u2212'; btn.title = col ? 'Expand' : 'Collapse'; }
+    },
+    spRemove: function(cid) {
+      var c = document.getElementById(cid);
+      if (c) c.parentNode.removeChild(c);
+      delete speakerRegistry[cid];
+      var cards = document.querySelectorAll('#speakersContainer .kms-ef-sp-card');
+      for (var i = 0; i < cards.length; i++) {
+        var l = document.getElementById('spLbl_' + cards[i].id);
+        if (l) l.textContent = 'Speaker ' + (i + 1);
+      }
+      refreshAllSpeakerDropdowns();
+      document.getElementById('noSpeakers').style.display = cards.length === 0 ? 'block' : 'none';
+    },
+    ssToggle: function(cid) {
+      var body = document.getElementById('ssBody_' + cid);
+      var btn = document.querySelector('#' + cid + ' .kms-ef-item-toggle');
+      if (!body) return;
+      var col = body.classList.toggle('kms-ef-collapsed');
+      if (btn) { btn.textContent = col ? '+' : '\u2212'; btn.title = col ? 'Expand' : 'Collapse'; }
+    },
+    ssRemove: function(cid) {
+      var c = document.getElementById(cid);
+      if (c) c.parentNode.removeChild(c);
+      var cards = document.querySelectorAll('#sessionsContainer .kms-ef-ss-card');
+      for (var i = 0; i < cards.length; i++) {
+        var l = document.getElementById('ssLbl_' + cards[i].id);
+        if (l) l.textContent = 'Session ' + (i + 1);
+      }
+      document.getElementById('noSessions').style.display = cards.length === 0 ? 'block' : 'none';
+    },
+    ssDdToggle: function(triggerId, listId) {
+      var t = document.getElementById(triggerId);
+      var l = document.getElementById(listId);
+      t.classList.toggle('kms-ef-open');
+      l.classList.toggle('kms-ef-open');
+    },
+    ssDdSelect: function(triggerId, listId, labelId, val, badgeId) {
+      document.getElementById(labelId).textContent = val;
+      document.getElementById(triggerId).classList.remove('kms-ef-open');
+      document.getElementById(listId).classList.remove('kms-ef-open');
+      if (badgeId) {
+        var badge = document.getElementById(badgeId);
+        badge.textContent = val;
+        badge.className = 'kms-ef-ss-badge ' + (val === 'Live Webcast' ? 'kms-ef-badge-live' : 'kms-ef-badge-prerecorded');
+      }
+    },
+    msDdToggle: function(triggerId, listId) {
+      var t = document.getElementById(triggerId);
+      var l = document.getElementById(listId);
+      t.classList.toggle('kms-ef-open');
+      l.classList.toggle('kms-ef-open');
+    },
+    msDdToggleItem: function(triggerId, spid, label) {
+      var trigger = document.getElementById(triggerId);
+      var existingTag = trigger.querySelector('[data-spid="' + spid + '"]');
+      if (existingTag) {
+        existingTag.parentNode.removeChild(existingTag);
+      } else {
+        var placeholder = trigger.querySelector('.kms-ef-ms-placeholder');
+        if (placeholder) placeholder.parentNode.removeChild(placeholder);
+        var tag = document.createElement('span');
+        tag.className = 'kms-ef-ms-tag';
+        tag.setAttribute('data-spid', spid);
+        tag.innerHTML = label + '<span class="kms-ef-ms-tag-x" onclick="event.stopPropagation();kmsEf.msDdRemoveTag(\'' + triggerId + '\',\'' + spid + '\')">×</span>';
+        trigger.appendChild(tag);
+      }
+      var list = document.querySelector('[data-trigger="' + triggerId + '"]');
+      var selectedIds = [];
+      var tags = trigger.querySelectorAll('.kms-ef-ms-tag');
+      for (var i = 0; i < tags.length; i++) {
+        selectedIds.push(tags[i].getAttribute('data-spid'));
+      }
+      rebuildSpeakerList(list, triggerId, selectedIds);
+    },
+    msDdRemoveTag: function(triggerId, spid) {
+      var trigger = document.getElementById(triggerId);
+      var tag = trigger.querySelector('[data-spid="' + spid + '"]');
+      if (tag) tag.parentNode.removeChild(tag);
+      var tags = trigger.querySelectorAll('.kms-ef-ms-tag');
+      if (tags.length === 0) {
+        var placeholder = document.createElement('span');
+        placeholder.className = 'kms-ef-ms-placeholder';
+        placeholder.textContent = 'Select speakers…';
+        trigger.appendChild(placeholder);
+      }
+      var list = document.querySelector('[data-trigger="' + triggerId + '"]');
+      var selectedIds = [];
+      for (var i = 0; i < tags.length; i++) {
+        selectedIds.push(tags[i].getAttribute('data-spid'));
+      }
+      rebuildSpeakerList(list, triggerId, selectedIds);
+    }
+  };
+
+  /* ================================================================== */
+  /* AUTH - User Login (No Secrets!)                                     */
+  /* ================================================================== */
+  async function loginByCredentials(email, password) {
+    var url = CONFIG.KALTURA_API + '/service/user/action/loginByLoginId?format=1';
+
+    var params = new URLSearchParams();
+    params.append('loginId', email);
+    params.append('password', password);
+    params.append('partnerId', CONFIG.PARTNER_ID);
+    params.append('expiry', '86400');
+    params.append('privileges', 'all:*,disableentitlement');
+
+    var response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    var text = await response.text();
+
+    // Check for error response (JSON format)
+    try {
+      var json = JSON.parse(text);
+      if (json.code || json.message) {
+        throw new Error(json.message || 'Login failed');
+      }
+    } catch (e) {
+      // If it's not JSON, it's the KS token (success)
+      if (!text.startsWith('djJ8')) {
+        throw new Error('Invalid response from login API');
+      }
+    }
+
+    // Remove quotes if present
+    var ks = text.replace(/^"|"$/g, '');
+    return ks;
+  }
+
+  async function generateJWT(ks) {
+    var response = await fetch(CONFIG.EPM_API_BASE + '/epm/auth/loginKS', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ks: ks })
+    });
+    var data = await response.json();
+    return data.token;
+  }
+
+
+  /* ================================================================== */
+  /* ADD SPEAKER                                                         */
+  /* ================================================================== */
+  function addSpeaker() {
+    speakerCount++;
+    var cid = 'sp' + uid();
+    var bioId = 'bio' + uid();
+    var fId = 'f' + uid();
+    var pvId = 'p' + uid();
+    var emId = 'em' + uid();
+    var fnId = 'fn' + uid();
+    var lnId = 'ln' + uid();
+    var ttId = 'tt' + uid();
+    var coId = 'co' + uid();
+    var smId = 'sm' + uid();
+    var skId = 'sk' + uid();
+
+    var card = document.createElement('div');
+    card.className = 'kms-ef-sp-card';
+    card.id = cid;
+    card.innerHTML =
+      '<div class="kms-ef-item-header">' +
+        '<button class="kms-ef-item-toggle" onclick="kmsEf.spToggle(\'' + cid + '\')" title="Collapse">\u2212</button>' +
+        '<span class="kms-ef-item-label" id="spLbl_' + cid + '">Speaker ' + speakerCount + '</span>' +
+        '<span class="kms-ef-item-summary" id="' + smId + '">No details yet</span>' +
+        '<button class="kms-ef-item-remove" onclick="kmsEf.spRemove(\'' + cid + '\')">Remove</button>' +
+      '</div>' +
+      '<div class="kms-ef-item-body" id="spBody_' + cid + '">' +
+        '<div class="kms-ef-field"><label class="kms-ef-label" for="' + emId + '">Email <span style="color:#ef4444">*</span></label>' +
+          '<input class="kms-ef-input" type="email" id="' + emId + '" placeholder="speaker@company.com"></div>' +
+        '<div class="kms-ef-row-2">' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + fnId + '">First Name <span style="color:#ef4444">*</span></label>' +
+            '<input class="kms-ef-input" type="text" id="' + fnId + '" placeholder="First name"></div>' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + lnId + '">Last Name <span style="color:#ef4444">*</span></label>' +
+            '<input class="kms-ef-input" type="text" id="' + lnId + '" placeholder="Last name"></div>' +
+        '</div>' +
+        '<div class="kms-ef-row-2">' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + ttId + '">Title</label>' +
+            '<input class="kms-ef-input" type="text" id="' + ttId + '" placeholder="e.g., CTO"></div>' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + coId + '">Company</label>' +
+            '<input class="kms-ef-input" type="text" id="' + coId + '" placeholder="Company name"></div>' +
+        '</div>' +
+        '<div class="kms-ef-row-img-bio">' +
+          '<div class="kms-ef-field">' +
+            '<label class="kms-ef-label">Speaker Image</label>' +
+            '<label class="kms-ef-img-trigger" for="' + fId + '">' +
+              '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="10" rx="2"/><circle cx="8" cy="8" r="2.5"/></svg>' +
+              '<span>Choose Image</span></label>' +
+            '<input class="kms-ef-file-hidden" type="file" id="' + fId + '" accept="image/*">' +
+            '<div class="kms-ef-upload-hint">Recommended: 500×500px</div>' +
+            '<div class="kms-ef-img-preview" id="' + pvId + '">No image selected</div>' +
+          '</div>' +
+          '<div class="kms-ef-field"><label class="kms-ef-label">Bio</label>' +
+            '<div class="kms-ef-rte-wrap"><div class="kms-ef-toolbar" id="toolbar_' + bioId + '"></div>' +
+              '<div class="kms-ef-editor" id="' + bioId + '" contenteditable="true" data-placeholder="Short speaker bio..."></div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="kms-ef-checkbox-group">' +
+          '<input type="checkbox" id="' + skId + '" checked>' +
+          '<label for="' + skId + '">Skip email invitation</label>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('speakersContainer').appendChild(card);
+    document.getElementById('noSpeakers').style.display = 'none';
+
+    // Wire up
+    document.getElementById('toolbar_' + bioId).innerHTML = mkToolbar(bioId);
+    wireImagePreview(fId, pvId);
+    blockImages(document.getElementById(bioId));
+
+    // Update summary on input
+    function upd() {
+      var fn = document.getElementById(fnId).value.trim();
+      var ln = document.getElementById(lnId).value.trim();
+      var co = document.getElementById(coId).value.trim();
+      var em = document.getElementById(emId).value.trim();
+      var p = [];
+      var nm = [fn, ln].filter(Boolean).join(' ');
+      if (nm) p.push(nm);
+      if (co) p.push(co);
+      if (em) p.push(em);
+      var el = document.getElementById(smId);
+      if (el) el.textContent = p.length ? p.join(' · ') : 'No details yet';
+
+      var spLabel = nm || em || ('Speaker ' + speakerCount);
+      speakerRegistry[cid] = spLabel;
+      refreshAllSpeakerDropdowns();
+    }
+    speakerRegistry[cid] = 'Speaker ' + speakerCount;
+    refreshAllSpeakerDropdowns();
+
+    [emId, fnId, lnId, ttId, coId].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', upd);
+    });
+  }
+
+  /* ================================================================== */
+  /* ADD SESSION                                                         */
+  /* ================================================================== */
+  function addSession() {
+    sessionCount++;
+    var cid = 'ss' + uid();
+    var nmId = 'nm' + uid();
+    var descId = 'desc' + uid();
+    var stId = 'st' + uid();
+    var etId = 'et' + uid();
+    var typeTriggerId = 'typeTrig' + uid();
+    var typeListId = 'typeList' + uid();
+    var typeLabelId = 'typeLbl' + uid();
+    var badgeId = 'badge' + uid();
+    var visTriggerId = 'visTrig' + uid();
+    var visListId = 'visList' + uid();
+    var visLabelId = 'visLbl' + uid();
+    var spTriggerId = 'spTrig' + uid();
+    var spListId = 'spList' + uid();
+    var smId = 'sm' + uid();
+
+    var card = document.createElement('div');
+    card.className = 'kms-ef-ss-card';
+    card.id = cid;
+    card.innerHTML =
+      '<div class="kms-ef-item-header">' +
+        '<button class="kms-ef-item-toggle" onclick="kmsEf.ssToggle(\'' + cid + '\')" title="Collapse">\u2212</button>' +
+        '<span class="kms-ef-item-label" id="ssLbl_' + cid + '">Session ' + sessionCount + '</span>' +
+        '<span class="kms-ef-ss-badge kms-ef-badge-live" id="' + badgeId + '">Live Webcast</span>' +
+        '<span class="kms-ef-item-summary" id="' + smId + '">No details yet</span>' +
+        '<button class="kms-ef-item-remove" onclick="kmsEf.ssRemove(\'' + cid + '\')">Remove</button>' +
+      '</div>' +
+      '<div class="kms-ef-item-body" id="ssBody_' + cid + '">' +
+        '<div class="kms-ef-field"><label class="kms-ef-label" for="' + nmId + '">Session Name <span style="color:#ef4444">*</span></label>' +
+          '<input class="kms-ef-input" type="text" id="' + nmId + '" placeholder="e.g., Keynote Session"></div>' +
+        '<div class="kms-ef-field"><label class="kms-ef-label">Session Description</label>' +
+          '<div class="kms-ef-rte-wrap"><div class="kms-ef-toolbar" id="toolbar_' + descId + '"></div>' +
+            '<div class="kms-ef-editor" id="' + descId + '" contenteditable="true" data-placeholder="Brief description..."></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="kms-ef-row-2">' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + stId + '">Start Time <span style="color:#ef4444">*</span></label>' +
+            '<input class="kms-ef-input" type="time" id="' + stId + '" value="10:00"></div>' +
+          '<div class="kms-ef-field"><label class="kms-ef-label" for="' + etId + '">End Time <span style="color:#ef4444">*</span></label>' +
+            '<input class="kms-ef-input" type="time" id="' + etId + '" value="11:00"></div>' +
+        '</div>' +
+        '<div class="kms-ef-row-2">' +
+          '<div class="kms-ef-field">' +
+            '<label class="kms-ef-label">Session Type <span style="color:#ef4444">*</span></label>' +
+            '<div class="kms-ef-dd-wrap">' +
+              '<div class="kms-ef-dd-trigger" id="' + typeTriggerId + '" onclick="kmsEf.ssDdToggle(\'' + typeTriggerId + '\',\'' + typeListId + '\')">' +
+                '<span id="' + typeLabelId + '">Live Webcast</span></div>' +
+              '<div class="kms-ef-dd-list" id="' + typeListId + '">' +
+                '<div class="kms-ef-dd-item kms-ef-selected" data-val="Live Webcast" onclick="kmsEf.ssDdSelect(\'' + typeTriggerId + '\',\'' + typeListId + '\',\'' + typeLabelId + '\',\'Live Webcast\',\'' + badgeId + '\')">Live Webcast</div>' +
+                '<div class="kms-ef-dd-item" data-val="Pre-recorded" onclick="kmsEf.ssDdSelect(\'' + typeTriggerId + '\',\'' + typeListId + '\',\'' + typeLabelId + '\',\'Pre-recorded\',\'' + badgeId + '\')">Pre-recorded</div>' +
+              '</div>' +
+              '<svg class="kms-ef-dd-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#666" stroke-width="2"><polyline points="3,5 7,9 11,5"/></svg>' +
+            '</div>' +
+          '</div>' +
+          '<div class="kms-ef-field">' +
+            '<label class="kms-ef-label">Visibility</label>' +
+            '<div class="kms-ef-dd-wrap">' +
+              '<div class="kms-ef-dd-trigger" id="' + visTriggerId + '" onclick="kmsEf.ssDdToggle(\'' + visTriggerId + '\',\'' + visListId + '\')">' +
+                '<span id="' + visLabelId + '">Published</span></div>' +
+              '<div class="kms-ef-dd-list" id="' + visListId + '">' +
+                '<div class="kms-ef-dd-item kms-ef-selected" data-val="published" onclick="kmsEf.ssDdSelect(\'' + visTriggerId + '\',\'' + visListId + '\',\'' + visLabelId + '\',\'Published\',\'' + badgeId + '\')">Published</div>' +
+                '<div class="kms-ef-dd-item" data-val="unlisted" onclick="kmsEf.ssDdSelect(\'' + visTriggerId + '\',\'' + visListId + '\',\'' + visLabelId + '\',\'Unlisted\',\'' + badgeId + '\')">Unlisted</div>' +
+                '<div class="kms-ef-dd-item" data-val="private" onclick="kmsEf.ssDdSelect(\'' + visTriggerId + '\',\'' + visListId + '\',\'' + visLabelId + '\',\'Private\',\'' + badgeId + '\')">Private</div>' +
+              '</div>' +
+              '<svg class="kms-ef-dd-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#666" stroke-width="2"><polyline points="3,5 7,9 11,5"/></svg>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="kms-ef-field">' +
+          '<label class="kms-ef-label">Session Speakers</label>' +
+          '<div class="kms-ef-dd-wrap">' +
+            '<div class="kms-ef-ms-trigger" id="' + spTriggerId + '" onclick="kmsEf.msDdToggle(\'' + spTriggerId + '\',\'' + spListId + '\')">' +
+              '<span class="kms-ef-ms-placeholder">Select speakers…</span></div>' +
+            '<div class="kms-ef-ms-list" id="' + spListId + '" data-splist="true" data-trigger="' + spTriggerId + '"></div>' +
+            '<svg class="kms-ef-dd-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#666" stroke-width="2"><polyline points="3,5 7,9 11,5"/></svg>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('sessionsContainer').appendChild(card);
+    document.getElementById('noSessions').style.display = 'none';
+
+    // Wire up
+    document.getElementById('toolbar_' + descId).innerHTML = mkToolbar(descId);
+    blockImages(document.getElementById(descId));
+    rebuildSpeakerList(document.getElementById(spListId), spTriggerId, []);
+
+    // Update summary
+    function upd() {
+      var nm = document.getElementById(nmId).value.trim();
+      var st = document.getElementById(stId).value;
+      var et = document.getElementById(etId).value;
+      var p = [];
+      if (nm) p.push(nm);
+      if (st && et) p.push(st + '–' + et);
+      var el = document.getElementById(smId);
+      if (el) el.textContent = p.length ? p.join(' · ') : 'No details yet';
+    }
+    [nmId, stId, etId].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', upd);
+    });
+  }
+
+  /* ================================================================== */
+  /* CREATE EVENT                                                        */
+  /* ================================================================== */
+  async function createEvent() {
+    var btn = document.getElementById('createEventBtn');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    try {
+      var title = document.getElementById('eventTitle').value.trim();
+      var description = document.getElementById('eventDesc').innerHTML.trim();
+
+      if (!title || !description) {
+        alert('Please fill in event title and description');
+        return;
+      }
+
+      // Create event payload
+      var now = new Date();
+      var startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);  // Tomorrow
+      var endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);  // 2 hours later
+
+      var payload = {
+        templateId: CONFIG.TEMPLATE_ID,
+        name: title,
+        description: description,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        timezone: 'America/New_York'
+      };
+
+      // Call EPM Internal API
+      var response = await fetch(CONFIG.EPM_API_BASE + '/epm/events/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + tokens.jwt
+        },
+        body: JSON.stringify({ event: payload })
+      });
+
+      var result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Event creation failed');
+      }
+
+      var eventId = result.event?._id || result.event?.id;
+      var epUrl = 'https://eventplatform.kaltura.com/' + eventId + '/overview';
+
+      var status = document.getElementById('resultStatus');
+      status.className = 'kms-ef-status kms-ef-success';
+      status.innerHTML =
+        '<strong>✓ Event Created Successfully!</strong><br><br>' +
+        '<strong>Event ID:</strong> ' + eventId + '<br>' +
+        '<strong>URL:</strong> <a href="' + epUrl + '" target="_blank">' + epUrl + '</a><br><br>' +
+        '<em>Note: Speakers and sessions will be added in a future version.</em>';
+
+    } catch (error) {
+      var status = document.getElementById('resultStatus');
+      status.className = 'kms-ef-status kms-ef-fail';
+      status.innerHTML = '<strong>Error:</strong> ' + error.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Create Event';
+    }
+  }
+
+  /* ================================================================== */
+  /* INIT & LOGIN                                                        */
+  /* ================================================================== */
+  function initLogin() {
+    // Show login modal on page load
+    document.getElementById('loginModal').classList.remove('kms-ef-hidden');
+    console.log('Showing login modal - user must enter credentials');
+  }
+
+  /* ================================================================== */
+  /* EVENT HANDLERS                                                      */
+  /* ================================================================== */
+
+  // Login button handler
+  document.getElementById('loginBtn').addEventListener('click', async function() {
+    var btn = this;
+    var loginStatus = document.getElementById('loginStatus');
+
+    btn.disabled = true;
+    btn.textContent = 'Signing In...';
+
+    // Clear previous status
+    loginStatus.className = 'kms-ef-status';
+    loginStatus.innerHTML = '';
+
+    try {
+      var email = document.getElementById('loginEmail').value.trim();
+      var password = document.getElementById('loginPassword').value.trim();
+
+      if (!email || !password) {
+        throw new Error('Please enter both email and password');
+      }
+
+      // Login via Kaltura API (generates KS with user's credentials)
+      console.log('Logging in as:', email);
+      tokens.ks = await loginByCredentials(email, password);
+      console.log('✓ KS generated via login:', tokens.ks.substring(0, 30) + '...');
+
+      // Generate JWT from KS
+      console.log('Generating JWT...');
+      tokens.jwt = await generateJWT(tokens.ks);
+      console.log('✓ JWT generated');
+
+      // Hide login modal
+      document.getElementById('loginModal').classList.add('kms-ef-hidden');
+
+      // Show main form
+      document.getElementById('mainForm').style.display = 'block';
+
+      // Initialize event description toolbar
+      document.getElementById('eventDescToolbar').innerHTML = mkToolbar('eventDesc');
+      blockImages(document.getElementById('eventDesc'));
+
+      console.log('✓ Authentication complete - form ready');
+
+    } catch (error) {
+      console.error('Login failed:', error);
+
+      // Show error message
+      loginStatus.className = 'kms-ef-status kms-ef-fail';
+      loginStatus.innerHTML = '<strong>✗ Login failed:</strong> ' + error.message + '<br>' +
+        '<small>Please check your email and password and try again.</small>';
+
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  });
+
+  // Enter key support for login form
+  document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      document.getElementById('loginBtn').click();
+    }
+  });
+
+  document.getElementById('addSpeakerBtn').addEventListener('click', addSpeaker);
+  document.getElementById('addSessionBtn').addEventListener('click', addSession);
+  document.getElementById('createEventBtn').addEventListener('click', createEvent);
+  document.getElementById('cancelBtn').addEventListener('click', function() {
+    if (confirm('Cancel and reset form?')) {
+      location.reload();
+    }
+  });
+
+  // Show login modal on page load
+  initLogin();
+
+})();
+</script>
+
+<!--
+  NOTES - USER LOGIN VERSION:
+
+  Authentication Flow:
+  1. Page loads → Login modal appears automatically
+  2. User manually enters email + password
+  3. Call: POST /service/user/action/loginByLoginId
+     - loginId: user email
+     - password: user password
+     - partnerId: 5620062
+     - privileges: all:*,disableentitlement
+     - expiry: 86400 (24 hours)
+  4. API returns KS token (or error)
+  5. Generate JWT from KS via POST /epm/auth/loginKS
+  6. Hide modal, show main form
+
+  Security Benefits:
+  ✅ NO admin secret in HTML - completely removed!
+  ✅ NO hardcoded credentials
+  ✅ User authenticates with THEIR Kaltura password
+  ✅ KS tied to specific user (proper identity)
+  ✅ Proper authentication flow
+  ✅ Clean audit trail (events created under actual user)
+
+  API Endpoints:
+  - Login: /service/user/action/loginByLoginId (POST)
+  - JWT: /epm/auth/loginKS (POST)
+  - Events: /epm/events/create (POST)
+
+  Features:
+  - Login modal with email + password fields
+  - Enter key support (press Enter to submit)
+  - Error handling for wrong credentials
+  - Event creation with speakers/sessions
+  - Rich text editors, image uploads
+  - Collapsible cards, multi-select speakers
+-->

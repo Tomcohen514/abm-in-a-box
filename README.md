@@ -15,11 +15,14 @@ Built with Claude Code + Developer Expertise + Solution Architecture
 
 AWS required a streamlined event creation workflow for ABM campaigns using Kaltura's Event Platform.
 
-**Solution**: KMS page + PS module backend with 18 PHP helper functions orchestrating EP Public API and EPM Internal API.
+**Production Solution**: KMS page + PS module backend with 18 PHP helper functions orchestrating EP Public API and EPM Internal API.
+
+**POC Solution**: User login HTML form (`embed-simple-manual.html`) - temporary AI-powered alternative for internal testing while PS solution is developed.
 
 **Repository contents**:
-- `helpers.php` - Production PHP functions for PS module
-- `embed-final-noauth.html` - POC prototype for design testing (reference)
+- `backend/helpers.php` - Production PHP functions for PS module
+- `frontend/embed-final-noauth.html` - Design POC prototype (reference)
+- `frontend/embed-simple-manual.html` - User login POC (temporary, AI-powered)
 
 **Development**: Human-AI collaboration using Claude Code to accelerate PS module development with professional standards and security practices.
 
@@ -35,6 +38,62 @@ Four approaches evaluated:
 **Option 3B**: EP Infrastructure for External App (infrastructure required)
 
 **Decision**: Customer selected Option 2 despite architectural concerns.
+
+---
+
+## POC Alternative: User Login Solution
+
+**Status**: Temporary POC (April 2026)  
+**Built by**: Tom Cohen (solo) using Claude AI  
+**Purpose**: Demonstrate AI/Claude capabilities while PS solution is developed  
+**File**: `production/src/embedded/embed-simple-manual.html`
+
+### Overview
+
+Single HTML file with user authentication - no secrets in HTML.
+
+### Authentication Logic
+
+```javascript
+// User enters email + password
+POST /service/user/action/loginByLoginId
+  ├─ loginId: user email
+  ├─ password: user password
+  ├─ partnerId: 5620062
+  ├─ privileges: all:*,disableentitlement
+  └─ Returns: KS token (user-specific)
+
+// Convert to JWT
+POST /epm/auth/loginKS
+  └─ Returns: JWT for EPM API
+
+// Create event
+POST /epm/events/create (using JWT)
+```
+
+### Features
+
+- Login modal on page load
+- User authenticates with their Kaltura password
+- Full event form (speakers, sessions, rich editors)
+- KS tied to actual user identity
+- Clean audit trail
+
+### Limitations (Why Temporary)
+
+1. **No SSO Support** - Requires manual email + password entry (not enterprise-ready)
+2. **No BE/FE Orchestration Control** - Direct API calls bypass our architecture
+3. **User Password Required** - Extra friction vs. seamless KMS integration
+4. **Kaltura Users Only** - Can't onboard external users
+
+### Use Cases
+
+✅ Internal testing  
+✅ AI capabilities demonstration  
+✅ Quick POC for stakeholders  
+❌ Customer delivery (use PS solution instead)
+
+**Context**: This POC shows what's achievable with AI while the PS team builds the production solution with proper SSO integration and BE/FE orchestration control.
 
 ---
 
