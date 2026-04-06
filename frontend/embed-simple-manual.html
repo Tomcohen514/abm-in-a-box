@@ -7,7 +7,8 @@
      - Login modal appears on page load
      - User enters both email and password manually
      - Generates KS via user.loginByLoginId API
-     - Full form features (speakers, sessions)
+     - Full form features (speakers, sessions, image uploads)
+     - Animated progress tracker during creation
      - Secure authentication flow
 
      SETUP:
@@ -16,7 +17,7 @@
      3. KS generated via their credentials (no admin secret needed)
      4. Create event with speakers and sessions
 
-     Version: 3.1.0 (User Login - Manual Entry)
+     Version: 3.3.0 (User Login + Full Speaker/Session + Image Upload)
      ================================================================ -->
 
 <style>
@@ -587,6 +588,61 @@
     font-style: italic;
   }
 
+  /* Progress Indicator */
+  .kms-ef-progress {
+    margin-top: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #006EFA;
+  }
+  .kms-ef-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    font-size: 14px;
+    color: #333;
+  }
+  .kms-ef-progress-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .kms-ef-progress-icon.pending { background: #e0e0e0; color: #999; }
+  .kms-ef-progress-icon.active {
+    background: #006EFA;
+    color: #fff;
+    animation: kms-ef-pulse 1.5s ease-in-out infinite;
+  }
+  .kms-ef-progress-icon.done { background: #28a745; color: #fff; }
+  .kms-ef-progress-icon.error { background: #dc3545; color: #fff; }
+
+  @keyframes kms-ef-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
+
+  .kms-ef-progress-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #006EFA;
+    border-radius: 50%;
+    animation: kms-ef-spin 0.8s linear infinite;
+  }
+
+  @keyframes kms-ef-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
   /* Responsive */
   @media (max-width: 580px) {
     .kms-ef-row-2,
@@ -676,6 +732,26 @@
     <div class="kms-ef-actions">
       <button class="kms-ef-btn-primary" id="createEventBtn">Create Event</button>
       <button class="kms-ef-btn-secondary" id="cancelBtn">Cancel</button>
+    </div>
+
+    <!-- Progress Tracker -->
+    <div class="kms-ef-progress" id="progressTracker" style="display: none;">
+      <div class="kms-ef-progress-item">
+        <span class="kms-ef-progress-icon pending" id="progEvent">○</span>
+        <span id="progEventText">Creating event...</span>
+      </div>
+      <div class="kms-ef-progress-item">
+        <span class="kms-ef-progress-icon pending" id="progSpeakers">○</span>
+        <span id="progSpeakersText">Creating speakers...</span>
+      </div>
+      <div class="kms-ef-progress-item">
+        <span class="kms-ef-progress-icon pending" id="progSessions">○</span>
+        <span id="progSessionsText">Creating sessions...</span>
+      </div>
+      <div class="kms-ef-progress-item">
+        <span class="kms-ef-progress-icon pending" id="progComplete">○</span>
+        <span id="progCompleteText">Finalizing...</span>
+      </div>
     </div>
 
     <div class="kms-ef-status" id="resultStatus"></div>
@@ -861,7 +937,7 @@
       if (badgeId) {
         var badge = document.getElementById(badgeId);
         badge.textContent = val;
-        badge.className = 'kms-ef-ss-badge ' + (val === 'Live Webcast' ? 'kms-ef-badge-live' : 'kms-ef-badge-prerecorded');
+        badge.className = 'kms-ef-ss-badge kms-ef-badge-live';  // Only Live Webcast supported
       }
     },
     msDdToggle: function(triggerId, listId) {
@@ -959,6 +1035,56 @@
     });
     var data = await response.json();
     return data.token;
+  }
+
+  // Upload speaker image (3-step process)
+  async function uploadSpeakerImage(eventId, imageFile) {
+    try {
+      // Step 1: Get upload credentials
+      console.log('  Step 1: Getting upload credentials...');
+      var credsResp = await fetch(CONFIG.EPM_API_BASE + '/epm/eventUsers/getUploadCredentials', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + tokens.jwt,
+          'x-eventId': eventId
+        },
+        body: JSON.stringify({ contextId: '' })
+      });
+
+      var creds = await credsResp.json();
+      if (!creds.uploadTokenId || !creds.ks) {
+        throw new Error('Failed to get upload credentials');
+      }
+
+      console.log('  Upload token:', creds.uploadTokenId);
+
+      // Step 2: Upload file
+      console.log('  Step 2: Uploading image file...');
+      var formData = new FormData();
+      formData.append('ks', creds.ks);
+      formData.append('uploadTokenId', creds.uploadTokenId);
+      formData.append('fileData', imageFile);
+      formData.append('resume', 'false');
+      formData.append('finalChunk', 'true');
+      formData.append('resumeAt', '0');
+
+      var uploadResp = await fetch(CONFIG.KALTURA_API + '/service/uploadtoken/action/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      var uploadResult = await uploadResp.text();
+      console.log('  Upload complete');
+
+      // Step 3: Entry ID is in the credentials
+      console.log('  Entry ID:', creds.entryId);
+      return creds.entryId;
+
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      return null;
+    }
   }
 
 
@@ -1108,16 +1234,9 @@
         '</div>' +
         '<div class="kms-ef-row-2">' +
           '<div class="kms-ef-field">' +
-            '<label class="kms-ef-label">Session Type <span style="color:#ef4444">*</span></label>' +
-            '<div class="kms-ef-dd-wrap">' +
-              '<div class="kms-ef-dd-trigger" id="' + typeTriggerId + '" onclick="kmsEf.ssDdToggle(\'' + typeTriggerId + '\',\'' + typeListId + '\')">' +
-                '<span id="' + typeLabelId + '">Live Webcast</span></div>' +
-              '<div class="kms-ef-dd-list" id="' + typeListId + '">' +
-                '<div class="kms-ef-dd-item kms-ef-selected" data-val="Live Webcast" onclick="kmsEf.ssDdSelect(\'' + typeTriggerId + '\',\'' + typeListId + '\',\'' + typeLabelId + '\',\'Live Webcast\',\'' + badgeId + '\')">Live Webcast</div>' +
-                '<div class="kms-ef-dd-item" data-val="Pre-recorded" onclick="kmsEf.ssDdSelect(\'' + typeTriggerId + '\',\'' + typeListId + '\',\'' + typeLabelId + '\',\'Pre-recorded\',\'' + badgeId + '\')">Pre-recorded</div>' +
-              '</div>' +
-              '<svg class="kms-ef-dd-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#666" stroke-width="2"><polyline points="3,5 7,9 11,5"/></svg>' +
-            '</div>' +
+            '<label class="kms-ef-label">Session Type</label>' +
+            '<div class="kms-ef-input" style="background:#f8f9fa;color:#666;cursor:default;">Live Webcast</div>' +
+            '<input type="hidden" id="' + typeLabelId + '" value="LiveWebcast">' +
           '</div>' +
           '<div class="kms-ef-field">' +
             '<label class="kms-ef-label">Visibility</label>' +
@@ -1173,8 +1292,30 @@
   /* ================================================================== */
   async function createEvent() {
     var btn = document.getElementById('createEventBtn');
+    var statusDiv = document.getElementById('resultStatus');
+    var progressDiv = document.getElementById('progressTracker');
     btn.disabled = true;
     btn.textContent = 'Creating...';
+
+    // Hide status, show progress tracker
+    statusDiv.style.display = 'none';
+    progressDiv.style.display = 'block';
+
+    function updateProgress(step, status, text) {
+      var icon = document.getElementById('prog' + step);
+      var textEl = document.getElementById('prog' + step + 'Text');
+      icon.className = 'kms-ef-progress-icon ' + status;
+      if (status === 'active') {
+        icon.innerHTML = '<div class="kms-ef-progress-spinner"></div>';
+      } else if (status === 'done') {
+        icon.textContent = '✓';
+      } else if (status === 'error') {
+        icon.textContent = '✗';
+      } else {
+        icon.textContent = '○';
+      }
+      if (text) textEl.textContent = text;
+    }
 
     try {
       var title = document.getElementById('eventTitle').value.trim();
@@ -1182,13 +1323,17 @@
 
       if (!title || !description) {
         alert('Please fill in event title and description');
+        btn.disabled = false;
+        progressDiv.style.display = 'none';
         return;
       }
 
-      // Create event payload
+      // Step 1: Create event
+      updateProgress('Event', 'active', 'Creating event...');
+
       var now = new Date();
-      var startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);  // Tomorrow
-      var endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);  // 2 hours later
+      var startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      var endDate = new Date(startDate.getTime() + 2 * 60 * 60 * 1000);
 
       var payload = {
         templateId: CONFIG.TEMPLATE_ID,
@@ -1199,7 +1344,6 @@
         timezone: 'America/New_York'
       };
 
-      // Call EPM Internal API
       var response = await fetch(CONFIG.EPM_API_BASE + '/epm/events/create', {
         method: 'POST',
         headers: {
@@ -1216,23 +1360,217 @@
       }
 
       var eventId = result.event?._id || result.event?.id;
+      console.log('✓ Event created:', eventId);
+
+      updateProgress('Event', 'done', 'Event created ✓');
+
+      // Step 2: Create speakers
+      updateProgress('Speakers', 'active', 'Creating speakers...');
+
+      var speakerCards = document.querySelectorAll('.kms-ef-sp-card');
+      var speakerUserIds = {};
+
+      for (var i = 0; i < speakerCards.length; i++) {
+        updateProgress('Speakers', 'active', 'Creating speaker ' + (i + 1) + ' of ' + speakerCards.length + '...');
+        var card = speakerCards[i];
+        var cardId = card.id;
+
+        var email = card.querySelector('[id^="em"]').value.trim();
+        var firstName = card.querySelector('[id^="fn"]').value.trim();
+        var lastName = card.querySelector('[id^="ln"]').value.trim();
+
+        if (email && firstName && lastName) {
+          console.log('Creating speaker:', firstName, lastName);
+
+          var bio = card.querySelector('[id^="bio"]').innerHTML.trim();
+          var title = card.querySelector('[id^="tt"]').value.trim();
+          var company = card.querySelector('[id^="co"]').value.trim();
+
+          // Check if image was selected
+          var imageInput = card.querySelector('input[type="file"]');
+          var imageFile = imageInput ? imageInput.files[0] : null;
+          var imageEntryId = null;
+
+          if (imageFile) {
+            console.log('  Uploading speaker image:', imageFile.name);
+            imageEntryId = await uploadSpeakerImage(eventId, imageFile);
+            if (imageEntryId) {
+              console.log('  ✓ Image uploaded:', imageEntryId);
+            }
+          }
+
+          var speakerData = {
+            user: {
+              email: email,
+              firstName: firstName,
+              lastName: lastName,
+              roles: ['Speaker']
+            },
+            skipEmail: card.querySelector('[id^="sk"]').checked
+          };
+
+          // Only add optional fields if they have content
+          if (title) speakerData.user.title = title;
+          if (company) speakerData.user.company = company;
+          if (bio) speakerData.user.bio = bio;
+          if (imageEntryId) speakerData.imageUrlEntryId = imageEntryId;
+
+          var spResp = await fetch(CONFIG.EPM_API_BASE + '/epm/eventUsers/inviteUser', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + tokens.jwt,
+              'x-eventId': eventId
+            },
+            body: JSON.stringify(speakerData)
+          });
+
+          var spResult = await spResp.json();
+          if (spResult.userId) {
+            speakerUserIds[cardId] = spResult.userId;
+            console.log('✓ Speaker created:', spResult.userId);
+          }
+        }
+      }
+
+      updateProgress('Speakers', 'done', Object.keys(speakerUserIds).length + ' speaker(s) created ✓');
+
+      // Step 3: Create sessions
+      updateProgress('Sessions', 'active', 'Creating sessions...');
+
+      var sessionCards = document.querySelectorAll('.kms-ef-ss-card');
+      var sessionsCreated = 0;
+
+      for (var i = 0; i < sessionCards.length; i++) {
+        updateProgress('Sessions', 'active', 'Creating session ' + (i + 1) + ' of ' + sessionCards.length + '...');
+        var card = sessionCards[i];
+
+        var sessionName = card.querySelector('[id^="nm"]').value.trim();
+        var sessionDesc = card.querySelector('[id^="desc"]').innerHTML.trim();
+        var startTime = card.querySelector('[id^="st"]').value;
+        var endTime = card.querySelector('[id^="et"]').value;
+        var visibility = card.querySelector('[id*="visLbl"]').textContent.toLowerCase();
+
+        if (sessionName && startTime && endTime) {
+          console.log('Creating session:', sessionName);
+
+          // Combine event date with session time
+          var sessionStart = new Date(startDate);
+          var [startHour, startMin] = startTime.split(':');
+          sessionStart.setHours(parseInt(startHour), parseInt(startMin), 0, 0);
+
+          var sessionEnd = new Date(startDate);
+          var [endHour, endMin] = endTime.split(':');
+          sessionEnd.setHours(parseInt(endHour), parseInt(endMin), 0, 0);
+
+          var sessionPayload = {
+            session: {
+              name: sessionName,
+              type: 'LiveWebcast',
+              description: sessionDesc,
+              startDate: sessionStart.toISOString(),
+              endDate: sessionEnd.toISOString(),
+              visibility: visibility
+            }
+          };
+
+          var ssResp = await fetch(CONFIG.EPM_API_BASE + '/epm/sessions/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + tokens.jwt,
+              'x-eventId': eventId
+            },
+            body: JSON.stringify(sessionPayload)
+          });
+
+          var ssResult = await ssResp.json();
+          var sessionId = ssResult.session?._id || ssResult.session?.id;
+
+          if (sessionId) {
+            console.log('✓ Session created:', sessionId);
+            sessionsCreated++;
+
+            // Assign speakers to this session
+            var selectedSpeakers = [];
+            var spTags = card.querySelectorAll('[id*="spTrig"] .kms-ef-ms-tag');
+            for (var j = 0; j < spTags.length; j++) {
+              var spCardId = spTags[j].getAttribute('data-spid');
+              var userId = speakerUserIds[spCardId];
+              if (userId) {
+                selectedSpeakers.push({
+                  uid: userId,
+                  order: (j + 1) * 1000,
+                  isHidden: false
+                });
+              }
+            }
+
+            if (selectedSpeakers.length > 0) {
+              console.log('Assigning', selectedSpeakers.length, 'speakers to session');
+
+              await fetch(CONFIG.EPM_API_BASE + '/epm/sessionParticipants/addSpeakers', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': 'Bearer ' + tokens.jwt,
+                  'x-eventId': eventId
+                },
+                body: JSON.stringify({
+                  sessionId: sessionId,
+                  speakers: selectedSpeakers
+                })
+              });
+
+              console.log('✓ Speakers assigned to session');
+            }
+          }
+        }
+      }
+
+      updateProgress('Sessions', 'done', sessionsCreated + ' session(s) created ✓');
+
+      // Step 4: Complete
+      updateProgress('Complete', 'active', 'Finalizing...');
+
       var epUrl = 'https://eventplatform.kaltura.com/' + eventId + '/overview';
 
-      var status = document.getElementById('resultStatus');
-      status.className = 'kms-ef-status kms-ef-success';
-      status.innerHTML =
-        '<strong>✓ Event Created Successfully!</strong><br><br>' +
-        '<strong>Event ID:</strong> ' + eventId + '<br>' +
-        '<strong>URL:</strong> <a href="' + epUrl + '" target="_blank">' + epUrl + '</a><br><br>' +
-        '<em>Note: Speakers and sessions will be added in a future version.</em>';
+      updateProgress('Complete', 'done', 'All done! ✓');
+
+      // Show final success message
+      setTimeout(function() {
+        progressDiv.style.display = 'none';
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'kms-ef-status kms-ef-success';
+        statusDiv.innerHTML =
+          '<strong>🎉 Event Created Successfully!</strong><br><br>' +
+          '<strong>Event ID:</strong> ' + eventId + '<br>' +
+          '<strong>URL:</strong> <a href="' + epUrl + '" target="_blank" style="color:#006EFA;font-weight:600;">' + epUrl + '</a><br><br>' +
+          '<strong>Summary:</strong><br>' +
+          '• Speakers: ' + Object.keys(speakerUserIds).length + '<br>' +
+          '• Sessions: ' + sessionsCreated + '<br>' +
+          '• Speakers assigned to sessions ✓';
+        btn.disabled = false;
+        btn.textContent = 'Create Another Event';
+      }, 800);
 
     } catch (error) {
-      var status = document.getElementById('resultStatus');
-      status.className = 'kms-ef-status kms-ef-fail';
-      status.innerHTML = '<strong>Error:</strong> ' + error.message;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Create Event';
+      console.error('Creation error:', error);
+
+      // Show error in progress tracker
+      updateProgress('Event', 'error');
+      updateProgress('Speakers', 'error');
+      updateProgress('Sessions', 'error');
+      updateProgress('Complete', 'error');
+
+      setTimeout(function() {
+        progressDiv.style.display = 'none';
+        statusDiv.style.display = 'block';
+        statusDiv.className = 'kms-ef-status kms-ef-fail';
+        statusDiv.innerHTML = '<strong>✗ Error:</strong> ' + error.message;
+        btn.disabled = false;
+        btn.textContent = 'Create Event';
+      }, 800);
     }
   }
 
@@ -1359,7 +1697,23 @@
   - Login modal with email + password fields
   - Enter key support (press Enter to submit)
   - Error handling for wrong credentials
-  - Event creation with speakers/sessions
-  - Rich text editors, image uploads
+  - Full event creation with speakers and sessions (Internal API)
+  - Session type: Live Webcast only
+  - Speaker image upload (direct from browser)
+  - Rich text editors (event description, session description, speaker bio)
   - Collapsible cards, multi-select speakers
+  - Speaker assignment to sessions
+  - Animated progress tracker with 4 stages:
+    1. Creating event
+    2. Creating speakers (with image uploads)
+    3. Creating sessions (with speaker assignments)
+    4. Finalizing
+
+  Internal API Endpoints Used:
+  - /epm/events/create (JWT + x-eventId)
+  - /epm/sessions/create (JWT + x-eventId)
+  - /epm/eventUsers/inviteUser (JWT + x-eventId)
+  - /epm/eventUsers/getUploadCredentials (JWT + x-eventId)
+  - /service/uploadtoken/action/upload (KS from upload credentials)
+  - /epm/sessionParticipants/addSpeakers (JWT + x-eventId)
 -->
