@@ -19,7 +19,7 @@ AWS required a simplified workflow for creating Event Platform events for ABM ca
 Four approaches were evaluated:
 
 1. **Training + EP Templates** - Train AWS team to use existing EP interface
-2. **PS Custom Form** ⭐ **SELECTED** - Custom KMS form with PS backend
+2. **PS Custom Form** ⭐ **SELECTED** - Custom KMS form with PS backend [https://github.com/Kaltura-PS/module-eventinbox]
 3. **EP Product Enhancement** - Enhance EP product for simplified workflow
 4. **External App Infrastructure** - Build standalone application
 
