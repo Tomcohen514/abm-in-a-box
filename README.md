@@ -25,7 +25,7 @@ Four approaches were evaluated:
 
 **Decision**: Customer selected Option 2 (PS Custom Form) for immediate delivery.
 
-**Full analysis**: [Solution Options Document](https://kaltura.atlassian.net/wiki/x/swBReAE)  
+**Full analysis**: [Solution Options Document](https://kaltura.atlassian.net/wiki/x/fYBQeAE)  
 **Scoping**: [AWS ABM Scoping Definition](https://kaltura.atlassian.net/wiki/spaces/~173687690/pages/6330286086/AWS+ABM+-+Scoping+definition)
 
 ---
@@ -35,7 +35,7 @@ Four approaches were evaluated:
 **Status**: Production development by PS team  
 **Architecture**: KMS form → PS Module backend → EP/EPM APIs
 
-### What It Does
+### User Flow
 
 1. AWS marketer navigates to KMS form (`/event-in-box`)
 2. Fills in event details, speakers, sessions, landing page content
@@ -43,21 +43,61 @@ Four approaches were evaluated:
 4. PS backend orchestrates API calls to create event
 5. Returns Event Platform URL and landing page preview
 
+### Backend Architecture
+
+The PS Module contains 18 PHP helper functions that orchestrate API calls:
+
+**Event & Session Creation** (EP Public API):
+- `createEvent()` - Creates event with template
+- `createSession()` - Adds sessions to event agenda
+
+**Speaker Management** (EPM Internal API):
+- `inviteSpeakerToEvent()` - Invites speaker with details
+- `addSpeakersToSession()` - Assigns speakers to specific sessions
+- `uploadSpeakerImageComplete()` - Uploads speaker profile images
+
+**Landing Page** (EPM Internal API):
+- `getEventLandingPage()` - Retrieves landing page components
+- `updateEventLandingPage()` - Updates landing page content
+- `updateLandingPageTextContent()` - Updates specific text areas
+- `uploadLandingPageImageComplete()` - Uploads landing page images
+
+**Utilities**:
+- `getEventUrls()` - Returns Event Platform management URL and public landing page URL
+- Image and video upload functions
+
+All functions include error handling, type safety, and audit logging.
+
+### API Flow
+
+```mermaid
+sequenceDiagram
+    participant User as AWS Marketer
+    participant KMS as KMS Form
+    participant PS as PS Module
+    participant EP as EP Public API
+    participant EPM as EPM Internal API
+
+    User->>KMS: Fill in event form
+    KMS->>PS: Submit data
+    
+    PS->>EP: Create event & sessions
+    EP-->>PS: eventId, sessionId
+    
+    PS->>EPM: Invite speakers, upload images
+    EPM-->>PS: userId, entryId
+    
+    PS->>EPM: Update landing page
+    EPM-->>PS: Success
+    
+    PS->>EPM: Get URLs
+    EPM-->>PS: epmUrl, kmsUrl
+    
+    PS-->>KMS: Event created + URLs
+    KMS-->>User: Success message + links
+```
+
 **Documentation**: [PS Solution Confluence](https://kaltura.atlassian.net/wiki/x/swBReAE)
-
-### Architecture
-
-```
-AWS Marketer (KMS)
-    ↓
-KMS Form (/event-in-box)
-    ↓
-PS Module Backend (18 PHP functions)
-    ↓
-EP Public API (Events, Sessions) + EPM Internal API (Speakers, Landing Page)
-    ↓
-Event Created + Landing Page Generated
-```
 
 ---
 
