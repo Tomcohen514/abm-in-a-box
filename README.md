@@ -127,8 +127,10 @@ Single HTML file showing rapid AI-powered development while PS team builds produ
 - Image/video uploads
 - Landing page customization
 
-**Frontend** (`frontend/`):
-- Design prototypes and AI POC files
+**Frontend**:
+- Design prototypes based on Figma's design
+
+- Github link: https://github.com/Kaltura-PS/module-eventinbox
 
 ---
 
